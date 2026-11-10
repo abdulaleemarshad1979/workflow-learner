@@ -6,6 +6,18 @@ A local application that learns demonstrated routines and replays them with your
 
 ![Dashboard after the automated practice test](docs/dashboard.png)
 
+## Your installation and current status
+
+- **Project folder:** `/home/abdul-aleem-arshad-mohammed/Work/Workflow Learner`
+- **Private GitHub repository:** https://github.com/abdulaleemarshad1979/workflow-learner
+- **Local dashboard:** http://127.0.0.1:8765
+- **Hosting:** local only. No Vercel deployment has been created, following your choice to keep it local.
+- **Application menu:** search for **Workflow Learner**.
+- **Browser setup:** load and pair the companion extension in your own Brave profile once, as described below.
+- **Recording:** off until you explicitly start a demonstration.
+
+A website hosted on Vercel cannot, by itself, watch or control your desktop apps. A future hosted interface would still require a running, paired local service. The current installation does not require Vercel, an API key, a paid AI subscription, or a cloud database.
+
 ## Start
 
 Requires Python 3.11+ and Brave, Chrome, or another Chromium browser. Linux desktop integration additionally requires system Python with PyGObject and AT-SPI.
@@ -15,7 +27,7 @@ cd "/home/abdul-aleem-arshad-mohammed/Work/Workflow Learner"
 ./start.sh
 ```
 
-For another checkout, run `./start.sh` from its directory. The first launch creates a virtual environment and installs dependencies. The dashboard opens at **http://127.0.0.1:8765**. Keep its terminal open while using the app; Ctrl+C stops the service. No recording starts automatically.
+For another checkout, run `./start.sh` from its directory. The first launch creates a virtual environment and installs dependencies. The dashboard opens at **http://127.0.0.1:8765**. Keep its terminal open while using the app; Ctrl+C stops the service. No recording starts automatically. If the app is already running, use the dashboard URL directly. Launching it a second time opens the existing workspace without changing its recorded data.
 
 To add an application-menu launcher:
 
@@ -58,6 +70,84 @@ Click **Try the practice workspace** on the dashboard. While recording:
 4. Stop/save, review the steps, and replay with different values.
 
 The practice workspace uses memory only. It never sends email, moves money, or updates external accounts. The screenshot shows test data from this exact flow.
+
+## Your first real workflow: invoice → sheet → Gmail → accounting
+
+Start with the practice workflow before working in real accounts. Then use this sequence:
+
+1. Open Brave and sign into your invoice portal, spreadsheet, Gmail, and accounting website. Choose the correct account in each app.
+2. Open the local dashboard in a separate tab and click **Teach a workflow**.
+3. Name it, for example, **Customer invoice processing**. Optionally enter one website origin per line. An origin is the protocol and hostname, without a document path: `https://mail.google.com`.
+4. Click **Start recording**, then switch to your work tabs. Complete just one invoice so the sequence has a clear beginning and end.
+5. For a canvas-based sheet, attachment upload, download, or unsupported app, complete that part manually and add a **manual** step in the editor afterward. Do not assume the recorder captured invisible spreadsheet cells or file dialogs.
+6. In Gmail, demonstrate preparing a draft first. If you include a Send action, leave its **Ask first** option enabled so every replay pauses before sending.
+7. Return to the dashboard and click **Stop & save**.
+8. Click **Edit steps**. Remove unrelated navigation and incidental clicks. Keep control labels aligned with the actual screen labels, because replay checks those labels.
+9. Use **Guided** replay for the first real run. Fill the named parameters, approve one step at a time, and verify the target account and result in the app.
+10. When the sequence is reliable, mark that revision reviewed. Use **Automatic** to run between Ask-first/manual checkpoints.
+11. Use **Teach again** when the website or routine changes. Review the new revision before using automatic replay again.
+
+The app does not currently extract data from invoices and infer how to transform it into spreadsheet rows. It records the steps; you supply replay inputs as parameters. Dedicated data extraction and business-system adapters would be separate features.
+
+## Daily use
+
+- **Begin work:** start the local app or open its already-running dashboard; check that the browser companion is connected.
+- **Teach something new:** start a named demonstration, complete the task, then stop/save. It can keep observing within that session until you stop or reach 1,000 steps.
+- **Protect a private interruption:** click **Pause** before switching to sensitive work. Click **Resume** when ready.
+- **Run an existing routine:** click **Replay**, choose Guided or Automatic, enter current values, and start. Browser replay opens new tabs in the paired profile.
+- **Help the app:** complete a manual step yourself, then click **I completed this step**. For an Ask-first step, inspect the destination and click **Approve this step**.
+- **Stop a run:** click **Stop**. Previously completed actions remain completed; the app cannot undo them.
+- **End the day:** stop/save any recording, stop unfinished replay, then close the local service terminal or press Ctrl+C. The app does not install an automatic login/background recording service.
+
+## Parameters and step editing
+
+A parameter looks like `{{invoice_number_a1b2c}}`. Names are generated from a control label plus a short selector identifier. The suffix distinguishes fields that share a label.
+
+- Enter a new value for each parameter when starting a replay.
+- To reuse one value across several steps, edit those steps to use the same parameter name, such as `{{customer_email}}`.
+- To keep a constant, replace the placeholder with a fixed value. Fixed values are saved in the local database.
+- A **select** parameter must be the HTML option value expected by the website; the visible option text may differ.
+- A **check** step uses `true` or `false`.
+- A **manual** step contains an instruction for you and never dispatches an automatic action.
+- The advanced JSON editor exposes the full step list, including tab identifiers, embedded-frame URLs, and desktop application metadata. Use it only when necessary; incorrect selectors or frame mappings cause replay to stop.
+- Save changes with **Save revision**, then review the new version before automatic mode. Saving does not run anything.
+
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| Dashboard will not open | Run `./start.sh` from the project folder; check that its terminal stays open. Use `http://127.0.0.1:8765`, not an HTTPS URL. |
+| Port 8765 already in use | An instance may already be running. Open the dashboard. If another program owns that port, stop that program before launching Workflow Learner. |
+| Browser companion not connected / OFF badge | Start the local service, check the extension is enabled, and copy/paste the pairing key again from Setup & privacy. |
+| Recording contains no browser steps | Reload your work tabs after installing the extension, wait a couple of seconds after starting recording, and check the origin allowlist. Browser internal pages and login screens are excluded. |
+| A field did not record | Password/private fields are excluded. Canvas/shadow widgets and file uploads are not generally supported. Add a manual step or use a dedicated adapter. |
+| Automatic mode is unavailable | Open the workflow, inspect its current revision, then mark it reviewed. Editing or teaching again resets review. |
+| Replay is waiting | It is in Guided mode, at an Ask-first checkpoint, or at a manual step. Complete the requested review or manual task. |
+| Control not found, label changed, or ambiguous target | Stop, inspect the current site, and teach or edit the affected step. The app will not guess another target. |
+| Keyboard step needs manual completion | Replace Enter/shortcut behavior with an explicit button click or a manual step. |
+| Desktop adapter unavailable | Verify system Python can import PyGObject and AT-SPI. On Debian/Ubuntu, the packages are `python3-gi` and `gir1.2-atspi-2.0`. |
+| Desktop control missing or ambiguous | Bring the target app forward. Its role/name must match uniquely. Apps without accessibility support require manual operation. |
+| Command timed out / acknowledgement lost | Inspect the target app first: it may already have performed the action. Do not blindly rerun a send/post/payment step. |
+| Website accepts typed values but ignores replay | Some apps require trusted input, rich editing protocols, or specialized integrations. Use a manual step for that action. |
+| A run was interrupted after restart | The app intentionally does not resume side effects after a restart. Review what already happened before starting again. |
+
+## Updates, backup, and removal
+
+To update from your private GitHub repository, stop the local service first, then:
+
+```bash
+cd "/home/abdul-aleem-arshad-mohammed/Work/Workflow Learner"
+git pull --ff-only
+.venv/bin/python -m pip install -r requirements-lock.txt
+.venv/bin/python -m pip install --no-deps -e .
+./start.sh
+```
+
+After extension source changes, click **Reload** for Workflow Learner on `brave://extensions`, then reload the websites you use.
+
+To back up your work, stop the local service and copy the entire `~/.local/share/workflow-learner` folder to a location you control. It contains private workflow metadata and pairing keys; do not publish it to GitHub. Restore the whole folder with the app stopped, retain private permissions, and restart. Keep the project source separately in GitHub.
+
+To remove the tool, stop it, remove the Workflow Learner browser extension, remove the project folder, and remove the `workflow-learner.desktop` launcher from `~/.local/share/applications` if desired. Delete the data folder only if you want to erase your saved workflows as well. No OS login autostart service was installed.
 
 ## Desktop apps
 
