@@ -202,3 +202,64 @@ def test_manual_steps_do_not_dispatch(engine):
     assert engine.poll() is None
     engine.control("approve")
     assert engine.run["status"] == "completed"
+
+
+def drain(e):
+    while cmd := e.poll():
+        e.result(cmd["id"], True)
+
+
+def test_bypass_needs_no_review_or_approval_and_skips_manual(engine):
+    wf = workflow(engine)
+    wf["steps"].insert(1, Step(kind="manual", label="Check by eye").model_dump())
+    engine.store.put("workflow", wf)
+    values = {p: "x" for p in parameters(wf["steps"])}
+    r = engine.begin_run(wf["id"], "bypass", values)
+    assert r["status"] == "running"
+    drain(engine)
+    assert r["status"] == "completed"
+    assert any(entry["status"] == "skipped manual step" for entry in r["log"])
+
+
+def test_saved_inputs_and_schedule(engine):
+    wf = workflow(engine)
+    with pytest.raises(Conflict, match="Save values"):
+        engine.set_autopilot(wf["id"], {"enabled": True, "every_minutes": 5, "daily_at": None})
+    engine.remember_inputs(wf["id"], {p: "saved" for p in parameters(wf["steps"])})
+    engine.set_autopilot(wf["id"], {"enabled": True, "every_minutes": 5, "daily_at": None})
+    assert [w["id"] for w in engine.due()] == [wf["id"]]
+    r = engine.begin_run(wf["id"], "bypass", {}, trigger="schedule")
+    assert not engine.due()  # just started
+    cmd = engine.poll()
+    engine.result(cmd["id"], False, "boom")
+    assert r["status"] == "failed"
+    assert "boom" in engine.store.get("workflow", wf["id"])["autopilot"]["paused_reason"]
+    assert not engine.due(time.time() + 3600)  # failure pauses autopilot
+    assert "saved" not in str(engine.store.all("run"))
+
+
+def test_daily_schedule_fires_once(engine):
+    from datetime import datetime
+
+    wf = workflow(engine)
+    engine.remember_inputs(wf["id"], {p: "v" for p in parameters(wf["steps"])})
+    engine.set_autopilot(wf["id"], {"enabled": True, "every_minutes": None, "daily_at": "09:00"})
+    nine = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0).timestamp()
+    assert not engine.due(nine - 60)
+    assert engine.due(nine + 60)
+    wf = engine.store.get("workflow", wf["id"])
+    wf["autopilot"]["last_started"] = nine + 60
+    engine.store.put("workflow", wf)
+    assert not engine.due(nine + 120)
+
+
+def test_adopt_pattern(engine):
+    workflow(engine)
+    for _ in range(2):
+        engine.start(Recording(name="again"))
+        event(engine, "fill", value="v")
+        event(engine)
+        event(engine, "press", value="Enter")
+        engine.stop()
+    wf = engine.adopt_pattern(0, "Learned")
+    assert wf["steps"][0]["kind"] == "navigate" and wf["demonstrations"] >= 2

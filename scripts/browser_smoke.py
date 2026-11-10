@@ -74,10 +74,10 @@ def main():
                     else context.wait_for_event("serviceworker")
                 )
                 extension_id = worker.url.split("/")[2]
+                assert extension_id == "ioonaammpiolcjejhgegdihpdplleanj", extension_id
                 popup = context.new_page()
                 popup.goto(f"chrome-extension://{extension_id}/popup.html")
-                popup.locator("#token").fill(keys["adapter"])
-                popup.get_by_role("button", name="Connect to local app").click()
+                # Zero-click pairing: no key is typed anywhere.
                 expect(popup.locator("#status")).to_contain_text("Connected", timeout=15000)
                 dashboard = context.new_page()
                 errors = []
@@ -121,14 +121,8 @@ def main():
                 assert len(wf["steps"]) >= 9, wf["steps"]
                 assert current["patterns"], "No repeated patterns learned"
                 assert "Sample Client" not in json.dumps(wf), "Raw field value persisted"
-                # Edit and review via public API; browser UI editing is checked below.
-                for step in wf["steps"]:
-                    step["confirm"] = False
-                client.put(
-                    "/api/workflows/" + wf["id"], json={"name": wf["name"], "steps": wf["steps"]}
-                ).raise_for_status()
-                client.post("/api/workflows/" + wf["id"] + "/review").raise_for_status()
-                wf = state()["workflows"][0]
+                # Bypass: no step edits, no review, no approvals.
+                assert any(s["confirm"] for s in wf["steps"]) and not wf["reviewed"]
                 values = {}
                 for name in wf["parameters"]:
                     values[name] = (
@@ -143,7 +137,7 @@ def main():
                         else "Replayed draft"
                     )
                 response = client.post(
-                    "/api/workflows/" + wf["id"] + "/runs", json={"mode": "automatic", "parameters": values}
+                    "/api/workflows/" + wf["id"] + "/runs", json={"mode": "bypass", "parameters": values, "remember": True}
                 )
                 response.raise_for_status()
                 result = wait_until(
@@ -162,8 +156,17 @@ def main():
                 expect(replay.locator("#result")).to_contain_text("Workflow complete")
                 expect(replay.locator("#recipient")).to_have_value("replay@example.com")
                 assert "Replay Client" not in json.dumps(state()["runs"]), "Run log persisted input values"
+                # Autopilot: scheduled hands-free run reusing saved inputs.
+                client.put(
+                    "/api/workflows/" + wf["id"] + "/autopilot", json={"enabled": True, "every_minutes": 5}
+                ).raise_for_status()
+                auto = wait_until(
+                    lambda: (r := state()["run"]) and r.get("trigger") == "schedule" and r["status"] in ("completed", "failed") and r,
+                    90,
+                )
+                assert auto["status"] == "completed", auto
                 dashboard.reload()
-                expect(dashboard.locator("#stat-runs")).to_have_text("1")
+                expect(dashboard.locator("#stat-runs")).to_have_text("2")
                 dashboard.locator("#overview-cards").get_by_role("button", name="Edit steps").click()
                 expect(dashboard.locator("#step-list .step")).to_have_count(len(wf["steps"]))
                 dashboard.locator("#editor-dialog [data-close]").first.click()
@@ -175,7 +178,7 @@ def main():
                 )
                 assert not errors, errors
                 print(
-                    f"PASS: MV3 pairing, two real demonstrations, {len(wf['steps'])} captured steps, pattern learning, automatic replay, editor and mobile layout."
+                    f"PASS: MV3 pairing, two real demonstrations, {len(wf['steps'])} captured steps, pattern learning, bypass replay with no approvals, scheduled autopilot, editor and mobile layout."
                 )
                 context.close()
         finally:

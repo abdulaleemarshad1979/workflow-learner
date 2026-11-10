@@ -65,3 +65,46 @@ def test_record_edit_review_run_delete(client):
 def test_empty_recording_has_no_workflow(client):
     client.post("/api/recordings", json={"name": "empty"})
     assert client.post("/api/recordings/stop").json()["workflow"] is None
+
+
+def test_zero_click_pairing_only_for_companion(client):
+    from workflow_learner.app import EXTENSION_ORIGIN
+
+    client.headers.pop("x-wl-token")
+    assert client.post("/api/adapter/pair", headers={"origin": "https://evil.example"}).status_code == 403
+    assert client.get("/api/adapter/pair", headers={"origin": EXTENSION_ORIGIN}).status_code == 403
+    r = client.post("/api/adapter/pair", headers={"origin": EXTENSION_ORIGIN})
+    assert r.json()["token"] == client.app.state.keys["adapter"]
+
+
+def test_extension_id_matches_manifest_key():
+    import base64
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from workflow_learner.app import EXTENSION_ORIGIN
+
+    key = json.loads((Path(__file__).parents[1] / "extension/manifest.json").read_text())["key"]
+    digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
+    assert EXTENSION_ORIGIN.endswith(digest.translate(str.maketrans("0123456789abcdef", "abcdefghijklmnop")))
+
+
+def test_bypass_run_and_autopilot_api(client):
+    s = client.post("/api/recordings", json={"name": "t"}).json()
+    adapter = {"x-wl-token": client.app.state.keys["adapter"]}
+    step = {"kind": "fill", "url": "https://example.com", "selector": "#a", "label": "Amount"}
+    client.post(
+        "/api/adapter/events", headers=adapter, json={"session_id": s["id"], "event_id": "1", "step": step}
+    )
+    wf = client.post("/api/recordings/stop").json()["workflow"]
+    (param,) = client.get("/api/state").json()["workflows"][0]["parameters"]
+    r = client.post(f"/api/workflows/{wf['id']}/runs", json={"mode": "bypass", "parameters": {param: "5"}})
+    assert r.status_code == 200 and r.json()["status"] == "running"
+    assert client.get("/api/state").json()["workflows"][0]["saved_inputs"] == [param]
+    client.post("/api/run/stop")
+    r = client.put(f"/api/workflows/{wf['id']}/autopilot", json={"enabled": True, "every_minutes": 5})
+    assert r.status_code == 200
+    assert client.app.state.autopilot_tick() is None  # companion offline -> waits
+    client.get("/api/adapter/state", headers=adapter)
+    assert client.app.state.autopilot_tick()["trigger"] == "schedule"

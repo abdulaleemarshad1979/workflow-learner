@@ -3,6 +3,7 @@ import contextlib
 import json
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,10 +13,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .engine import Conflict, Engine
-from .models import Event, Recording, Result, RunRequest, WorkflowEdit, parameters
+from .models import Autopilot, Event, Recording, Result, RunRequest, WorkflowEdit, parameters
 from .store import Store
 
 STATIC = Path(__file__).parent / "static"
+# Derived from the public "key" in extension/manifest.json.
+EXTENSION_ORIGIN = "chrome-extension://ioonaammpiolcjejhgegdihpdplleanj"
 
 
 def create_app(data_dir=None, background=True):
@@ -66,6 +69,30 @@ def create_app(data_dir=None, background=True):
                 native["error"] = "Desktop adapter failed; see setup instructions."
             await asyncio.sleep(0.3)
 
+    def autopilot_tick():
+        """Start at most one due workflow when nothing else is happening."""
+        if engine.session or engine.active_run():
+            return None
+        browser_ok = time.time() - engine.last_extension < 40
+        for wf in engine.due():
+            needs_browser = any(not s["kind"].startswith("native_") for s in wf["steps"])
+            if needs_browser and not browser_ok:
+                continue  # Try again once Brave's companion reconnects.
+            try:
+                return engine.begin_run(wf["id"], "bypass", {}, trigger="schedule")
+            except Conflict as exc:
+                wf["autopilot"]["paused_reason"] = str(exc)
+                store.put("workflow", wf)
+        return None
+
+    async def autopilot_loop():
+        while True:
+            with contextlib.suppress(Conflict, KeyError, ValueError, OSError):
+                autopilot_tick()
+            await asyncio.sleep(15)
+
+    app_tick = autopilot_tick
+
     async def read_desktop(proc, session_id):
         while line := await proc.stdout.readline():
             try:
@@ -95,9 +122,11 @@ def create_app(data_dir=None, background=True):
 
     @asynccontextmanager
     async def lifespan(app):
-        task = asyncio.create_task(desktop_loop()) if background else None
+        tasks = (
+            [asyncio.create_task(desktop_loop()), asyncio.create_task(autopilot_loop())] if background else []
+        )
         yield
-        if task:
+        for task in tasks:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
@@ -109,11 +138,18 @@ def create_app(data_dir=None, background=True):
     )
     app.state.engine = engine
     app.state.keys = keys
+    app.state.autopilot_tick = app_tick
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "testserver"])
 
     @app.middleware("http")
     async def local_security(request: Request, call_next):
         path = request.url.path
+        if path == "/api/adapter/pair":
+            # Zero-click pairing. Browsers never let a web page forge Origin, and this
+            # ID is fixed by the companion's manifest key.
+            if request.method == "POST" and request.headers.get("origin") == EXTENSION_ORIGIN:
+                return JSONResponse({"token": keys["adapter"]}, headers={"Cache-Control": "no-store"})
+            return JSONResponse({"detail": "Only the Workflow Learner companion can pair"}, status_code=403)
         if request.headers.get("sec-fetch-site") == "cross-site" and not request.headers.get("x-wl-token"):
             return JSONResponse(
                 {"detail": "Open Workflow Learner directly on this computer"}, status_code=403
@@ -160,7 +196,14 @@ def create_app(data_dir=None, background=True):
         import time
 
         engine.expire()
-        workflows = [{**w, "parameters": parameters(w["steps"])} for w in store.all("workflow")]
+        workflows = [
+            {
+                **w,
+                "parameters": parameters(w["steps"]),
+                "saved_inputs": sorted(engine.saved_inputs(w["id"])),
+            }
+            for w in store.all("workflow")
+        ]
         return {
             "recording": engine.session,
             "run": engine.run,
@@ -214,6 +257,7 @@ def create_app(data_dir=None, background=True):
             raise Conflict("Stop recording and replay before deleting")
         store.get("workflow", ident)
         store.delete("workflow", ident)
+        store.delete("inputs", ident)
         for s in store.all("session"):
             if s.get("workflow_id") == ident:
                 store.forget_session(s["id"])
@@ -229,7 +273,29 @@ def create_app(data_dir=None, background=True):
 
     @app.post("/api/workflows/{ident}/runs")
     async def run(ident: str, body: RunRequest):
-        return engine.begin_run(ident, body.mode, body.parameters)
+        result = engine.begin_run(ident, body.mode, body.parameters)
+        if body.remember:
+            engine.remember_inputs(ident, body.parameters)
+        return result
+
+    @app.put("/api/workflows/{ident}/inputs")
+    async def save_inputs(ident: str, body: dict[str, str]):
+        engine.remember_inputs(ident, body)
+        return {"saved": sorted(engine.saved_inputs(ident))}
+
+    @app.delete("/api/workflows/{ident}/inputs")
+    async def forget_inputs(ident: str):
+        store.get("workflow", ident)
+        store.delete("inputs", ident)
+        return {"saved": []}
+
+    @app.put("/api/workflows/{ident}/autopilot")
+    async def autopilot(ident: str, body: Autopilot):
+        return engine.set_autopilot(ident, body.model_dump())
+
+    @app.post("/api/patterns/{index}/adopt")
+    async def adopt(index: int, body: dict[str, str]):
+        return engine.adopt_pattern(index, (body.get("name") or "Learned routine")[:100])
 
     @app.post("/api/run/{action}")
     async def run_control(action: str):

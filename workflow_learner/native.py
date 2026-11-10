@@ -13,6 +13,9 @@ import uuid
 
 SENSITIVE = re.compile(r"password|secret|token|otp|one.?time|credit.?card|cvv|cvc", re.IGNORECASE)
 BROWSERS = re.compile(r"brave|chromium|chrome|firefox|codex", re.IGNORECASE)
+# Desktop shell UI (dock, overview search, top bar) is transient. Recording it gives
+# unnamed, unreplayable controls; the app launch that follows is what matters.
+SHELLS = {"gnome-shell", "plasmashell", "xfce4-panel", "xfdesktop", "cinnamon", "budgie-panel"}
 
 
 def emit(value):
@@ -32,7 +35,7 @@ def describe(obj):
     role = obj.get_role_name()
     name = obj.get_name() or ""
     app = obj.get_application().get_name() or ""
-    if SENSITIVE.search(role + " " + name) or BROWSERS.search(app):
+    if SENSITIVE.search(role + " " + name) or BROWSERS.search(app) or app in SHELLS:
         return None
     path = []
     current = obj
@@ -68,11 +71,8 @@ def observe():
             only_app = os.environ.get("WL_NATIVE_TEST_APP")
             if only_app and event.source.get_application().get_name() != only_app:
                 return
-            description = describe(event.source)
-            if not description:
-                return
-            app_name = description["app"]
-            if app_name not in launched:
+            app_name = event.source.get_application().get_name() or ""
+            if app_name and app_name not in launched and app_name not in SHELLS:
                 launched.add(app_name)
                 ids = launchers.get(app_name.casefold(), set())
                 if len(ids) == 1:
@@ -87,6 +87,9 @@ def observe():
                             },
                         }
                     )
+            description = describe(event.source)
+            if not description:
+                return
             kind = "native_fill" if event.type.startswith("object:text-changed") else "native_focus"
             if kind == "native_fill":
                 states = event.source.get_state_set()
@@ -108,26 +111,73 @@ def observe():
     GLib.MainLoop().run()
 
 
-def execute(step):
-    Atspi, _ = load_atspi()
-    if step["kind"] == "native_launch":
-        from gi.repository import Gio
+def launch(app_id):
+    from gi.repository import Gio
 
-        # Only launch an installed desktop entry; never interpret a shell command.
-        entries = [a for a in Gio.AppInfo.get_all() if a.get_id() == step["app"]]
-        if len(entries) != 1 or not entries[0].launch([], None):
-            raise ValueError("Installed application launcher not found")
-        return {"ok": True}
+    # Only launch an installed desktop entry; never interpret a shell command.
+    entries = [a for a in Gio.AppInfo.get_all() if a.get_id() == app_id]
+    if len(entries) != 1:
+        raise ValueError("Installed application launcher not found")
+    # The launched app must not inherit our stdout pipe, or the service waits for
+    # EOF until the app exits.
+    devnull = os.open(os.devnull, os.O_RDWR)
+    saved = os.dup(1), os.dup(0)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 0)
+    try:
+        ok = entries[0].launch([], None)
+    finally:
+        os.dup2(saved[0], 1)
+        os.dup2(saved[1], 0)
+        for fd in (*saved, devnull):
+            os.close(fd)
+    if not ok:
+        raise ValueError("Application failed to launch")
+
+
+def by_path(root, step):
+    node = root
+    for index in step["path"]:
+        if node is None or index >= node.get_child_count():
+            return None
+        node = node.get_child_at_index(index)
+    if node is None or node.get_role_name() != step["role"]:
+        return None
+    if step["label"] != step["role"] and (node.get_name() or node.get_role_name()) != step["label"]:
+        return None
+    return node
+
+
+def resolve(Atspi, step, wait=10.0):
+    """Find the recorded control, waiting for a just-launched app to appear."""
+    deadline = time.monotonic() + wait
+    while True:
+        error = find(Atspi, step)
+        if not isinstance(error, str):
+            return error
+        if time.monotonic() >= deadline:
+            raise ValueError(error)
+        time.sleep(0.4)
+
+
+def find(Atspi, step):
     desktop = Atspi.get_desktop(0)
     matches = [
         desktop.get_child_at_index(i)
         for i in range(desktop.get_child_count())
-        if desktop.get_child_at_index(i).get_name() == step["app"]
+        if desktop.get_child_at_index(i) is not None
+        and desktop.get_child_at_index(i).get_name() == step["app"]
     ]
+    if not matches:
+        return "Recorded desktop app is not open: " + step["app"]
+    # Several windows/instances: try the recorded path in each, newest last.
+    for app in reversed(matches):
+        node = by_path(app, step)
+        if node is not None:
+            return node
     if len(matches) != 1:
-        raise ValueError("Open the recorded desktop app; it must have one matching accessibility application")
-    # Accessibility indices can change across toolkit cache snapshots. Resolve
-    # the exact role/name uniquely in the named application before any action.
+        return "Several copies of " + step["app"] + " are open; close the extras"
+    # Indices can shift; fall back to a unique role/name match.
     candidates = []
     pending = [(matches[0], 0)]
     seen = set()
@@ -145,13 +195,29 @@ def execute(step):
             if child is not None:
                 pending.append((child, depth + 1))
     if pending or len(candidates) != 1:
-        raise ValueError("Desktop control missing or ambiguous; no action was performed")
-    obj = candidates[0]
+        return f"Control '{step['label']}' not found uniquely in {step['app']}; re-teach this step"
+    return candidates[0]
+
+
+def execute(step):
+    Atspi, _ = load_atspi()
+    if step["kind"] == "native_launch":
+        launch(step["app"])
+        return {"ok": True}
+    if step["app"] in SHELLS:
+        # Old recordings captured dock/overview clicks; the following launch step covers them.
+        return {"ok": True, "skipped": True}
+    obj = resolve(Atspi, step)
     if not describe(obj):
         raise ValueError("Protected desktop control; complete it manually")
     if step["kind"] == "native_focus":
-        if not obj.get_component_iface().grab_focus():
-            raise ValueError("This app does not allow accessibility focus; bring it forward manually")
+        # GTK4 and others refuse programmatic focus. Finding the control is enough:
+        # the next fill/action addresses it directly.
+        try:
+            focused = obj.get_component_iface().grab_focus()
+        except Exception:  # noqa: BLE001 -- binding raises GLib.Error variants
+            focused = False
+        return {"ok": True, "focused": bool(focused)}
     elif step["kind"] == "native_fill":
         states = obj.get_state_set()
         if not states.contains(Atspi.StateType.EDITABLE):

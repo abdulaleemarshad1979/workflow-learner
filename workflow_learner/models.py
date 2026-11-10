@@ -87,8 +87,18 @@ class WorkflowEdit(BaseModel):
 
 
 class RunRequest(BaseModel):
-    mode: Literal["guided", "automatic"] = "guided"
+    mode: Literal["guided", "automatic", "bypass"] = "bypass"
     parameters: dict[str, str] = Field(default_factory=dict)
+    remember: bool = True
+
+
+class Autopilot(BaseModel):
+    """Hands-free replay settings for one reviewed workflow."""
+
+    enabled: bool = False
+    # Either repeat every N minutes, or once a day at local HH:MM. Neither = on demand only.
+    every_minutes: int | None = Field(default=None, ge=5, le=10080)
+    daily_at: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class Result(BaseModel):

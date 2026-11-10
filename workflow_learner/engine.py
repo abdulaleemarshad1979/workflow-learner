@@ -4,6 +4,7 @@ import hashlib
 import re
 import time
 from collections import defaultdict
+from datetime import datetime
 
 from .models import SECRET, Event, Recording, Step, origin, parameters, substitute
 from .store import Store, now, uid
@@ -184,12 +185,59 @@ class Engine:
         )
         return self.store.put("workflow", wf)
 
-    def begin_run(self, ident, mode, values):
+    def saved_inputs(self, ident):
+        try:
+            return self.store.get("inputs", ident)["values"]
+        except KeyError:
+            return {}
+
+    def remember_inputs(self, ident, values):
+        self.store.get("workflow", ident)
+        merged = {**self.saved_inputs(ident), **{k: v for k, v in values.items() if v != ""}}
+        self.store.put("inputs", {"id": ident, "values": merged})
+
+    def set_autopilot(self, ident, settings):
+        wf = self.store.get("workflow", ident)
+        if settings["enabled"]:
+            missing = set(parameters(wf["steps"])) - self.saved_inputs(ident).keys()
+            if missing:
+                raise Conflict("Save values for autopilot first: " + ", ".join(sorted(missing)))
+        previous = wf.get("autopilot") or {}
+        wf["autopilot"] = {
+            **settings,
+            "last_started": previous.get("last_started"),
+            "paused_reason": "",
+        }
+        return self.store.put("workflow", wf)
+
+    def due(self, at=None):
+        """Workflows whose autopilot schedule says they should start now."""
+        at = at or time.time()
+        local = datetime.fromtimestamp(at)
+        ready = []
+        for wf in self.store.all("workflow"):
+            ap = wf.get("autopilot") or {}
+            if not ap.get("enabled") or ap.get("paused_reason"):
+                continue
+            last = ap.get("last_started") or 0
+            if ap.get("every_minutes"):
+                if at - last >= ap["every_minutes"] * 60:
+                    ready.append(wf)
+            elif ap.get("daily_at"):
+                hour, minute = map(int, ap["daily_at"].split(":"))
+                slot = local.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
+                if at >= slot > last:
+                    ready.append(wf)
+        return ready
+
+    def begin_run(self, ident, mode, values, trigger="you"):
         if self.session or self.active_run():
             raise Conflict("Finish the current recording or run first")
         wf = self.store.get("workflow", ident)
+        # Bypass mode skips every approval and the review gate, by your choice.
         if mode == "automatic" and not wf["reviewed"]:
             raise Conflict("Review this workflow revision before automatic replay")
+        values = {**self.saved_inputs(ident), **{k: v for k, v in values.items() if v != ""}}
         missing = set(parameters(wf["steps"])) - values.keys()
         if missing:
             raise Conflict("Supply parameters: " + ", ".join(sorted(missing)))
@@ -206,6 +254,7 @@ class Engine:
             "name": wf["name"],
             "revision": wf["revision"],
             "mode": mode,
+            "trigger": trigger,
             "status": "running",
             "cursor": 0,
             "total": len(resolved),
@@ -214,6 +263,10 @@ class Engine:
             "approved": False,
             "log": [],
         }
+        if trigger == "schedule":
+            ap = wf["autopilot"]
+            ap["last_started"] = time.time()
+            self.store.put("workflow", wf)
         self._advance()
         return self.run
 
@@ -228,12 +281,19 @@ class Engine:
             wf = self.store.get("workflow", r["workflow_id"])
             wf["successes"] += 1
             self.store.put("workflow", wf)
+        elif r["mode"] == "bypass" and self.values["steps"][r["cursor"]]["kind"] == "manual":
+            # Nothing to execute for a manual note; keep going hands-free.
+            r["log"].append({"index": r["cursor"], "status": "skipped manual step", "at": now()})
+            r["cursor"] += 1
+            return self._advance()
         else:
             step = self.values["steps"][r["cursor"]]
             r["current"] = {k: v for k, v in step.items() if k != "value"}
             r["status"] = (
                 "waiting"
-                if r["mode"] == "guided" or step["confirm"] or step["kind"] == "manual"
+                if r["mode"] == "guided"
+                or step["kind"] == "manual"
+                or (step["confirm"] and r["mode"] != "bypass")
                 else "running"
             )
             r["approved"] = False
@@ -308,8 +368,45 @@ class Engine:
             self.values = {}
             wf = self.store.get("workflow", r["workflow_id"])
             wf["failures"] += 1
+            if wf.get("autopilot") and r.get("trigger") == "schedule":
+                # Never repeat a half-finished routine unattended. You resume it.
+                wf["autopilot"]["paused_reason"] = "Last autopilot run failed: " + r["error"][:200]
             self.store.put("workflow", wf)
         return self._save_run()
+
+    def adopt_pattern(self, index, name):
+        found = self.patterns()
+        if not 0 <= index < len(found):
+            raise KeyError("pattern not found")
+        steps = found[index]["steps"]
+        if (
+            steps[0]["kind"] != "navigate"
+            and steps[0].get("url")
+            and not steps[0]["kind"].startswith("native_")
+        ):
+            steps = [
+                Step(
+                    kind="navigate",
+                    url=steps[0]["url"],
+                    tab=steps[0]["tab"],
+                    label="Open website",
+                    confirm=False,
+                ).model_dump(),
+                *steps,
+            ]
+        wf = {
+            "id": uid(),
+            "name": name,
+            "steps": steps,
+            "revision": 1,
+            "demonstrations": found[index]["observations"],
+            "reviewed": False,
+            "created_at": now(),
+            "updated_at": now(),
+            "successes": 0,
+            "failures": 0,
+        }
+        return self.store.put("workflow", wf)
 
     def patterns(self):
         occurrences = defaultdict(set)

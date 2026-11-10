@@ -1,12 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "Workflow Learner — Local Companion",
-  "version": "0.1.0",
+  "name": "Workflow Learner \u2014 Local Companion",
+  "version": "0.2.0",
   "description": "Learn and replay workflows on your own computer. Recording starts only from your local dashboard.",
   "minimum_chrome_version": "120",
-  "permissions": ["storage", "tabs", "alarms", "webNavigation"],
-  "host_permissions": ["http://*/*", "https://*/*"],
-  "background": {"service_worker": "background.js"},
-  "action": {"default_popup": "popup.html", "default_title": "Workflow Learner"},
-  "content_scripts": [{"matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_start", "all_frames": true}]
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Workflow Learner"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwvhaspUkUHvsdFK4g9k8nKSeaezWzSfU8d+KVNTHK/l+1ewvyZUxc9O9hBCJBS4w3NqNUsyd4jGPRJPteT40NiqfB/wUbnVYzYURTAqJLoww0CViLYM9vIwBog8xyQXEann5NOUVyEvtbqJ3zXMbsiJ3nHui7J4JByEbhDGxKF5JClrESszFJpfvxWM0Iokr2DBh0EZWst0Q3yn3Gu5qCMXFb31nPhlG4J2InXRnH6IKUa5P/61BVS1jhdHhcvxIBzK6ydQWT7olpED51/vX7xDTmUYdbbKnIDp3IRB0SuHDJ3USgnsYYIuc/UlzxCa/fnDnOvugCFKzMLbSVFdJYQIDAQAB"
 }

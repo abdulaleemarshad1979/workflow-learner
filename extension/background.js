@@ -3,15 +3,28 @@ let state = {recording: false};
 let busy = false;
 let eventQueue = Promise.resolve();
 
-async function api(path, body) {
-  const {token} = await chrome.storage.local.get('token');
-  if (!token) throw new Error('Pair the extension first');
+async function autoPair() {
+  // The local app recognises this companion by its fixed extension ID.
+  const response = await fetch(BASE + '/api/adapter/pair', {method: 'POST', signal: AbortSignal.timeout(5000)});
+  if (!response.ok) throw new Error('Automatic pairing refused (' + response.status + ')');
+  const {token} = await response.json();
+  await chrome.storage.local.set({token});
+  return token;
+}
+
+async function api(path, body, retry = true) {
+  let {token} = await chrome.storage.local.get('token');
+  if (!token) token = await autoPair();
   const response = await fetch(BASE + '/api/adapter/' + path, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {'Content-Type': 'application/json', 'X-WL-Token': token},
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(5000)
   });
+  if (response.status === 401 && retry) {
+    await chrome.storage.local.remove('token');
+    return api(path, body, false);
+  }
   if (!response.ok) throw new Error('Local service rejected request (' + response.status + ')');
   return response.json();
 }
