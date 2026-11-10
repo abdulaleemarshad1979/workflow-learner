@@ -1,4 +1,7 @@
 const BASE = 'http://127.0.0.1:8765';
+// Tells the app which browser this companion runs in; replays go to the browser you chose.
+const BRANDS = (navigator.userAgentData?.brands || []).map(b => b.brand).join(' ');
+const BROWSER = navigator.brave || /Brave/.test(BRANDS) ? 'brave' : /Google Chrome/.test(BRANDS) ? 'chrome' : 'chromium';
 let state = {recording: false};
 let busy = false;
 let eventQueue = Promise.resolve();
@@ -17,7 +20,7 @@ async function api(path, body, retry = true) {
   if (!token) token = await autoPair();
   const response = await fetch(BASE + '/api/adapter/' + path, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: {'Content-Type': 'application/json', 'X-WL-Token': token},
+    headers: {'Content-Type': 'application/json', 'X-WL-Token': token, 'X-WL-Browser': BROWSER},
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(5000)
   });
@@ -132,6 +135,15 @@ async function tick() {
   busy = true;
   try {
     state = await api('state');
+    // Unpacked companion: reload from disk when the app ships a newer version.
+    if (state.companion_version && state.companion_version !== chrome.runtime.getManifest().version && !state.running && !state.recording) {
+      const {reloadedFor} = await chrome.storage.local.get('reloadedFor');
+      if (reloadedFor !== state.companion_version) {  // once per version: no reload loop
+        await chrome.storage.local.set({reloadedFor: state.companion_version});
+        chrome.runtime.reload();
+        return;
+      }
+    }
     await chrome.action.setBadgeText({text: state.recording ? 'REC' : state.running ? 'RUN' : ''});
     await chrome.action.setBadgeBackgroundColor({color: state.recording ? '#be384a' : '#166b58'});
     const {command} = await api('poll', {});

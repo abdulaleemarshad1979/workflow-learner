@@ -36,7 +36,8 @@ def main():
         server = subprocess.Popen(
             [sys.executable, "-m", "workflow_learner", "--no-open"],
             cwd=ROOT,
-            env={**os.environ, "WORKFLOW_LEARNER_DATA": str(temp / "data")},
+            # Separate HOME: ignore this machine's real browser profiles.
+            env={**os.environ, "WORKFLOW_LEARNER_DATA": str(temp / "data"), "HOME": str(temp)},
             stdout=log,
             stderr=log,
         )
@@ -137,7 +138,8 @@ def main():
                         else "Replayed draft"
                     )
                 response = client.post(
-                    "/api/workflows/" + wf["id"] + "/runs", json={"mode": "bypass", "parameters": values, "remember": True}
+                    "/api/workflows/" + wf["id"] + "/runs",
+                    json={"mode": "bypass", "parameters": values, "remember": True},
                 )
                 response.raise_for_status()
                 result = wait_until(
@@ -161,7 +163,12 @@ def main():
                     "/api/workflows/" + wf["id"] + "/autopilot", json={"enabled": True, "every_minutes": 5}
                 ).raise_for_status()
                 auto = wait_until(
-                    lambda: (r := state()["run"]) and r.get("trigger") == "schedule" and r["status"] in ("completed", "failed") and r,
+                    lambda: (
+                        (r := state()["run"])
+                        and r.get("trigger") == "schedule"
+                        and r["status"] in ("completed", "failed")
+                        and r
+                    ),
                     90,
                 )
                 assert auto["status"] == "completed", auto

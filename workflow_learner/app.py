@@ -96,6 +96,19 @@ def pick_browser(choice=None, home=None):
     return with_companion[0] if with_companion else None
 
 
+try:
+    COMPANION_VERSION = json.loads((Path(__file__).parents[1] / "extension/manifest.json").read_text())[
+        "version"
+    ]
+except (OSError, ValueError, KeyError):
+    COMPANION_VERSION = None
+
+
+def companion_kind(request):
+    kind = request.headers.get("x-wl-browser", "").lower()
+    return kind if kind in {"chrome", "brave", "chromium"} else "unknown"
+
+
 def create_app(data_dir=None, background=True):
     directory = Path(
         data_dir or os.environ.get("WORKFLOW_LEARNER_DATA", Path.home() / ".local/share/workflow-learner")
@@ -118,8 +131,24 @@ def create_app(data_dir=None, background=True):
         except KeyError:
             return None
 
+    seen = {}  # companion browser kind -> last poll time
+    cached = {"at": 0.0, "target": None}
+
+    def replay_target():
+        """Chosen replay browser profile; cached because companions poll every second."""
+        if time.time() - cached["at"] > 10:
+            cached.update(at=time.time(), target=pick_browser(browser_choice()))
+        return cached["target"]
+
+    def replay_seen():
+        target = replay_target()
+        if not target:
+            return engine.last_extension
+        # Untagged (older) companions still count until they update themselves.
+        return max(seen.get(target["browser"].lower(), 0.0), seen.get("unknown", 0.0))
+
     async def launch_browser():
-        target = pick_browser(browser_choice())
+        target = replay_target()
         if not target:
             return False
         # Opening the exact profile skips Chrome's "Who's using Chrome?" picker.
@@ -141,12 +170,12 @@ def create_app(data_dir=None, background=True):
         run_id = engine.run["id"]
         if browser_wait["run"] != run_id:
             browser_wait.update(run=run_id, since=time.time(), launched=False)
-        if time.time() - engine.last_extension < 5:
+        if time.time() - replay_seen() < 5:
             browser_wait["since"] = time.time()  # connected; the companion will poll
             return
         waited = time.time() - browser_wait["since"]
         # Silent for 40s+ means the browser is closed (a live companion polls every second).
-        if not browser_wait["launched"] and time.time() - engine.last_extension > 40:
+        if not browser_wait["launched"] and time.time() - replay_seen() > 40:
             browser_wait["launched"] = True
             with contextlib.suppress(OSError, ValueError):
                 await launch_browser()
@@ -194,7 +223,7 @@ def create_app(data_dir=None, background=True):
         """Start at most one due workflow when nothing else is happening."""
         if engine.session or engine.active_run():
             return None
-        browser_ok = time.time() - engine.last_extension < 40
+        browser_ok = time.time() - replay_seen() < 40
         for wf in engine.due():
             needs_browser = any(not s["kind"].startswith("native_") for s in wf["steps"])
             if needs_browser and not browser_ok:
@@ -332,6 +361,7 @@ def create_app(data_dir=None, background=True):
             "runs": store.all("run")[:30],
             "patterns": engine.patterns(),
             "extension_connected": time.time() - engine.last_extension < 40,
+            "replay_connected": time.time() - replay_seen() < 40,
             "native": {k: v for k, v in native.items() if k != "process"},
             "browsers": browser_profiles(),
             "browser_choice": browser_choice(),
@@ -423,6 +453,7 @@ def create_app(data_dir=None, background=True):
         if choice and not any(p["id"] == choice for p in browser_profiles()):
             raise KeyError("browser profile not found")
         store.put("setting", {"id": "browser", "value": choice})
+        cached["at"] = 0.0
         return {"replay_browser": pick_browser(choice)}
 
     @app.post("/api/patterns/{index}/adopt")
@@ -434,16 +465,15 @@ def create_app(data_dir=None, background=True):
         return engine.control(action)
 
     @app.get("/api/adapter/state")
-    async def adapter_state():
-        import time
-
-        engine.last_extension = time.time()
+    async def adapter_state(request: Request):
+        engine.last_extension = seen[companion_kind(request)] = time.time()
         s = engine.session
         return {
             "session_id": s["id"] if s else None,
             "recording": bool(s and s["status"] == "recording"),
             "origins": s["origins"] if s else [],
             "running": bool(engine.active_run()),
+            "companion_version": COMPANION_VERSION,
         }
 
     @app.post("/api/adapter/events")
@@ -451,8 +481,20 @@ def create_app(data_dir=None, background=True):
         return engine.record(body)
 
     @app.post("/api/adapter/poll")
-    async def poll():
-        return {"command": engine.poll()}
+    async def poll(request: Request):
+        kind = companion_kind(request)
+        seen[kind] = time.time()
+        target = replay_target()
+        if target and kind not in {target["browser"].lower(), "unknown"}:
+            # Another browser's companion: it records, but replays go to your chosen browser.
+            engine.last_extension = time.time()
+            engine.expire()
+            return {"command": None}
+        command = engine.poll()
+        if command:
+            engine.run["log"][-1]["by"] = kind  # shown in Run history
+            store.put("run", engine.run)
+        return {"command": command}
 
     @app.post("/api/adapter/result")
     async def result(body: Result):

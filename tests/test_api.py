@@ -5,7 +5,9 @@ from workflow_learner.app import create_app
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
+    # Keep tests independent of the browsers installed on this machine.
+    monkeypatch.setattr("workflow_learner.app.pick_browser", lambda *a, **k: None)
     app = create_app(tmp_path, background=False)
     with TestClient(app) as client:
         client.headers["x-wl-token"] = app.state.keys["admin"]
@@ -148,3 +150,30 @@ def test_browser_setting_api(client):
     assert client.put("/api/settings/browser", json={"id": "nope|x"}).status_code == 404
     assert client.put("/api/settings/browser", json={"id": None}).status_code == 200
     assert client.get("/api/state").json()["browser_choice"] is None
+
+
+def test_replay_goes_only_to_chosen_browser(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from workflow_learner import app as app_module
+
+    monkeypatch.setattr(app_module, "pick_browser", lambda *a, **k: {"browser": "Chrome", "name": "Me"})
+    app = app_module.create_app(tmp_path, background=False)
+    with TestClient(app) as c:
+        c.headers["x-wl-token"] = app.state.keys["admin"]
+        s = c.post("/api/recordings", json={"name": "t"}).json()
+        adapter = {"x-wl-token": app.state.keys["adapter"]}
+        step = {"kind": "click", "url": "https://example.com", "selector": "#a", "label": "Go"}
+        c.post(
+            "/api/adapter/events",
+            headers=adapter,
+            json={"session_id": s["id"], "event_id": "1", "step": step},
+        )
+        wf = c.post("/api/recordings/stop").json()["workflow"]
+        c.post(f"/api/workflows/{wf['id']}/runs", json={"mode": "bypass"})
+        assert (
+            c.post("/api/adapter/poll", headers={**adapter, "x-wl-browser": "brave"}).json()["command"]
+            is None
+        )
+        assert c.post("/api/adapter/poll", headers={**adapter, "x-wl-browser": "chrome"}).json()["command"]
+        assert c.get("/api/state").json()["replay_connected"]

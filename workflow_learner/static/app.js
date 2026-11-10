@@ -32,19 +32,19 @@ function setHTML(el, value) { if (el._rendered !== value) { el.innerHTML = value
 function render() {
   const workflows = data.workflows || [];
   const rb = data.replay_browser;
-  $('#connection').textContent = data.extension_connected ? '● Browser companion connected' : rb ? `○ ${rb.browser} closed · opens “${rb.name}” on replay` : '○ Browser companion not installed';
+  $('#connection').textContent = data.replay_connected ? `● ${rb ? rb.browser : 'Browser'} companion connected` : rb ? `○ ${rb.browser} closed · opens “${rb.name}” on replay` : data.extension_connected ? '● Browser companion connected' : '○ Browser companion not installed';
   const options = '<option value="">Automatic — profile with the companion you used last</option>' + (data.browsers || []).map(p => `<option value="${esc(p.id)}">${esc(p.browser)} · ${esc(p.name)}${p.companion ? ' · companion installed' : ' · no companion'}</option>`).join('');
   const sel = $('#browser-choice');
   if (sel._rendered !== options && document.activeElement !== sel) { sel.innerHTML = options; sel._rendered = options; sel.value = data.browser_choice || ''; }
   $('#browser-note').textContent = rb ? `Replays use ${rb.browser} → ${rb.name} (${rb.profile}). If it is closed, Workflow Learner opens this profile directly, skipping the “Who's using Chrome?” picker.` : 'Install the companion in a browser profile first.';
-  $('#connection').classList.toggle('no-connect', !data.extension_connected);
+  $('#connection').classList.toggle('no-connect', !(data.replay_connected || data.extension_connected));
   $('#nav-count').textContent = $('#stat-workflows').textContent = workflows.length;
   $('#stat-demos').textContent = workflows.reduce((a,w) => a + w.demonstrations, 0);
   $('#stat-runs').textContent = workflows.reduce((a,w) => a + w.successes, 0);
   setHTML($('#overview-cards'), workflows.length ? workflows.slice(0, 3).map(card).join('') : empty());
   setHTML($('#workflow-cards'), workflows.length ? workflows.map(card).join('') : empty());
   setHTML($('#pattern-cards'), data.patterns?.length ? data.patterns.map((p, i) => `<article class="card"><span class="tag">Seen in ${p.observations} demonstrations</span><h3>${p.steps.length} steps in a familiar order</h3><div class="pattern-sequence">${p.steps.map(s => esc(s.label || s.kind)).join(' → ')}</div><div class="card-actions"><button data-adopt="${i}">Save as workflow</button></div></article>`).join('') : '<div class="empty"><div><h3>Patterns grow with practice.</h3><p>Demonstrate a routine twice. Repeated sequences will appear here.</p></div></div>');
-  setHTML($('#run-history'), data.runs?.length ? data.runs.map(r => `<article class="history-row"><div><b>${esc(r.name)}</b><small>${esc(new Date(r.created_at).toLocaleString())} · revision ${r.revision} · ${r.mode}</small>${r.error ? `<p>${esc(r.error)}</p>` : ''}<details><summary>Execution log</summary><small>${r.log.map(l => `Step ${l.index + 1}: ${esc(l.status)}`).join('<br>')}</small></details></div><span>${r.cursor}/${r.total} steps</span><span class="badge">${esc(r.status)}</span></article>`).join('') : '<div class="empty"><h3>No workflows have run yet.</h3></div>');
+  setHTML($('#run-history'), data.runs?.length ? data.runs.map(r => `<article class="history-row"><div><b>${esc(r.name)}</b><small>${esc(new Date(r.created_at).toLocaleString())} · revision ${r.revision} · ${r.mode}</small>${r.error ? `<p>${esc(r.error)}</p>` : ''}<details><summary>Execution log</summary><small>${r.log.map(l => `Step ${l.index + 1}: ${esc(l.status)}${l.by && l.by !== 'unknown' ? ' in ' + esc(l.by) : ''}`).join('<br>')}</small></details></div><span>${r.cursor}/${r.total} steps</span><span class="badge">${esc(r.status)}</span></article>`).join('') : '<div class="empty"><h3>No workflows have run yet.</h3></div>');
   $('#data-location').textContent = 'Local data folder: ' + data.data_dir;
   $('#native-status').textContent = 'Desktop adapter: ' + data.native?.status + (data.native?.error ? ' · ' + data.native.error : '');
   const rec = data.recording;
