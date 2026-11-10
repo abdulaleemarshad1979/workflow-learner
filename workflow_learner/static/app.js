@@ -31,8 +31,12 @@ function card(w) {
 function setHTML(el, value) { if (el._rendered !== value) { el.innerHTML = value; el._rendered = value; } }
 function render() {
   const workflows = data.workflows || [];
-  const browserName = /brave/i.test(data.companion_browser || '') ? 'Brave' : /chrom/i.test(data.companion_browser || '') ? 'Chrome' : 'browser';
-  $('#connection').textContent = data.extension_connected ? `● ${browserName} companion connected` : data.companion_browser ? `○ ${browserName} closed · opens automatically on replay` : '○ Browser companion not installed';
+  const rb = data.replay_browser;
+  $('#connection').textContent = data.extension_connected ? '● Browser companion connected' : rb ? `○ ${rb.browser} closed · opens “${rb.name}” on replay` : '○ Browser companion not installed';
+  const options = '<option value="">Automatic — profile with the companion you used last</option>' + (data.browsers || []).map(p => `<option value="${esc(p.id)}">${esc(p.browser)} · ${esc(p.name)}${p.companion ? ' · companion installed' : ' · no companion'}</option>`).join('');
+  const sel = $('#browser-choice');
+  if (sel._rendered !== options && document.activeElement !== sel) { sel.innerHTML = options; sel._rendered = options; sel.value = data.browser_choice || ''; }
+  $('#browser-note').textContent = rb ? `Replays use ${rb.browser} → ${rb.name} (${rb.profile}). If it is closed, Workflow Learner opens this profile directly, skipping the “Who's using Chrome?” picker.` : 'Install the companion in a browser profile first.';
   $('#connection').classList.toggle('no-connect', !data.extension_connected);
   $('#nav-count').textContent = $('#stat-workflows').textContent = workflows.length;
   $('#stat-demos').textContent = workflows.reduce((a,w) => a + w.demonstrations, 0);
@@ -163,5 +167,8 @@ $('#forget-inputs').onclick = async () => {
   if (!confirm('Delete saved input values for this workflow? Autopilot will turn off until you save new ones.')) return;
   try { await api(`workflows/${selected.id}/inputs`, 'DELETE'); await api(`workflows/${selected.id}/autopilot`, 'PUT', {enabled: false}); $('#autopilot-dialog').close(); await refresh(); } catch(e) { error(e); }
 };
+$('#browser-choice').addEventListener('change', async e => {
+  try { const r = await api('settings/browser', 'PUT', {id: e.target.value || null}); toast(r.replay_browser && !r.replay_browser.companion ? 'Saved. Install the companion in that profile too, or replays cannot run there.' : 'Replay browser saved.'); await refresh(); } catch(err) { error(err); }
+});
 $('#copy-key').onclick = async () => { try {await navigator.clipboard.writeText(data.adapter_token); toast('Pairing key copied. Paste it into the browser companion.');}catch(e){error(e);} };
 refresh(); setInterval(refresh, 2000);

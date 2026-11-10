@@ -20,35 +20,80 @@ STATIC = Path(__file__).parent / "static"
 # Derived from the public "key" in extension/manifest.json.
 EXTENSION_ORIGIN = "chrome-extension://ioonaammpiolcjejhgegdihpdplleanj"
 EXTENSION_ID = EXTENSION_ORIGIN.rsplit("/", 1)[1]
-# Desktop launcher id -> profile folder, in preference order.
+# Desktop launcher id -> user-data folder, in preference order.
 BROWSERS = [
     ("google-chrome.desktop", ".config/google-chrome"),
-    ("com.google.Chrome.desktop", ".var/app/com.google.Chrome/config/google-chrome"),
     ("brave-browser.desktop", ".config/BraveSoftware/Brave-Browser"),
-    ("com.brave.Browser.desktop", ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser"),
     ("chromium.desktop", ".config/chromium"),
     ("chromium-browser.desktop", ".config/chromium"),
 ]
 APP_DIRS = [
     Path("/usr/share/applications"),
     Path.home() / ".local/share/applications",
-    Path("/var/lib/flatpak/exports/share/applications"),
 ]
 
 
-def companion_browser(home=None):
-    """Launcher of the installed browser whose profile has the companion, if any."""
-    home = Path(home or Path.home())
-    for desktop_id, profile in BROWSERS:
-        if not any((d / desktop_id).exists() for d in APP_DIRS):
+def _executable(desktop_id):
+    """Absolute program path from a launcher's Exec= line (no shell, no arguments)."""
+    for directory in APP_DIRS:
+        try:
+            for line in (directory / desktop_id).read_text().splitlines():
+                if line.startswith("Exec="):
+                    program = line[5:].split()[0]
+                    return program if Path(program).is_absolute() and Path(program).exists() else None
+        except (OSError, IndexError):
             continue
-        for prefs in (home / profile).glob("*/*Preferences"):
-            try:
-                if EXTENSION_ID in prefs.read_text(errors="ignore"):
-                    return desktop_id
-            except OSError:
-                continue
     return None
+
+
+def browser_profiles(home=None):
+    """Every profile of every installed Chromium browser, marking which has the companion."""
+    home = Path(home or Path.home())
+    found = []
+    for desktop_id, data in BROWSERS:
+        program = _executable(desktop_id)
+        if not program or any(f["launcher"] == desktop_id for f in found):
+            continue
+        root = home / data
+        try:
+            info = json.loads((root / "Local State").read_text())["profile"]
+        except (OSError, ValueError, KeyError):
+            info = {}
+        names = {k: v.get("name", k) for k, v in info.get("info_cache", {}).items()}
+        folders = {p.parent.name for p in root.glob("*/Preferences")} | set(names)
+        for folder in sorted(folders - {"System Profile", "Guest Profile"}):
+            has = False
+            for prefs in (root / folder).glob("*Preferences"):
+                with contextlib.suppress(OSError):
+                    has = has or EXTENSION_ID in prefs.read_text(errors="ignore")
+            found.append(
+                {
+                    "id": f"{desktop_id}|{folder}",
+                    "launcher": desktop_id,
+                    "program": program,
+                    "profile": folder,
+                    "name": names.get(folder, folder),
+                    "browser": "Brave"
+                    if "brave" in desktop_id
+                    else "Chrome"
+                    if "chrome" in desktop_id
+                    else "Chromium",
+                    "companion": has,
+                    "last_used": info.get("last_used") == folder,
+                }
+            )
+    return found
+
+
+def pick_browser(choice=None, home=None):
+    """Your chosen profile, else the companion profile you used last."""
+    profiles = browser_profiles(home)
+    for p in profiles:
+        if p["id"] == choice:
+            return p
+    with_companion = [p for p in profiles if p["companion"]]
+    with_companion.sort(key=lambda p: not p["last_used"])
+    return with_companion[0] if with_companion else None
 
 
 def create_app(data_dir=None, background=True):
@@ -67,19 +112,26 @@ def create_app(data_dir=None, background=True):
     native = {"process": None, "status": "off", "error": ""}
     browser_wait = {"run": None, "since": 0.0, "launched": False}
 
-    async def launch_app(desktop_id):
-        proc = await asyncio.create_subprocess_exec(
-            "/usr/bin/python3",
-            str(Path(__file__).with_name("native.py")),
-            "execute",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
+    def browser_choice():
+        try:
+            return store.get("setting", "browser")["value"]
+        except KeyError:
+            return None
+
+    async def launch_browser():
+        target = pick_browser(browser_choice())
+        if not target:
+            return False
+        # Opening the exact profile skips Chrome's "Who's using Chrome?" picker.
+        await asyncio.create_subprocess_exec(
+            target["program"],
+            "--profile-directory=" + target["profile"],
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
         )
-        out, _ = await asyncio.wait_for(
-            proc.communicate(json.dumps({"kind": "native_launch", "app": desktop_id}).encode()), 20
-        )
-        return json.loads(out).get("ok", False)
+        return True
 
     async def ensure_browser():
         """Open the companion's browser when a run needs it, instead of hanging."""
@@ -96,10 +148,8 @@ def create_app(data_dir=None, background=True):
         # Silent for 40s+ means the browser is closed (a live companion polls every second).
         if not browser_wait["launched"] and time.time() - engine.last_extension > 40:
             browser_wait["launched"] = True
-            desktop_id = companion_browser()
-            if desktop_id:
-                with contextlib.suppress(OSError, ValueError, TimeoutError):
-                    await launch_app(desktop_id)
+            with contextlib.suppress(OSError, ValueError):
+                await launch_browser()
         if waited > 60:
             engine.fail_waiting(
                 "Browser companion did not connect. Open the browser that has the Workflow Learner "
@@ -283,7 +333,9 @@ def create_app(data_dir=None, background=True):
             "patterns": engine.patterns(),
             "extension_connected": time.time() - engine.last_extension < 40,
             "native": {k: v for k, v in native.items() if k != "process"},
-            "companion_browser": companion_browser(),
+            "browsers": browser_profiles(),
+            "browser_choice": browser_choice(),
+            "replay_browser": pick_browser(browser_choice()),
             "data_dir": str(directory),
             "adapter_token": keys["adapter"],
         }
@@ -364,6 +416,14 @@ def create_app(data_dir=None, background=True):
     @app.put("/api/workflows/{ident}/autopilot")
     async def autopilot(ident: str, body: Autopilot):
         return engine.set_autopilot(ident, body.model_dump())
+
+    @app.put("/api/settings/browser")
+    async def set_browser(body: dict[str, str | None]):
+        choice = body.get("id") or None
+        if choice and not any(p["id"] == choice for p in browser_profiles()):
+            raise KeyError("browser profile not found")
+        store.put("setting", {"id": "browser", "value": choice})
+        return {"replay_browser": pick_browser(choice)}
 
     @app.post("/api/patterns/{index}/adopt")
     async def adopt(index: int, body: dict[str, str]):

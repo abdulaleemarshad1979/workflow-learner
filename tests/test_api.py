@@ -110,16 +110,41 @@ def test_bypass_run_and_autopilot_api(client):
     assert client.app.state.autopilot_tick()["trigger"] == "schedule"
 
 
-def test_companion_browser_detection(tmp_path, monkeypatch):
+def test_browser_profiles_and_choice(tmp_path, monkeypatch):
+    import json
+
     from workflow_learner import app as app_module
 
     apps = tmp_path / "apps"
     apps.mkdir()
-    (apps / "google-chrome.desktop").write_text("[Desktop Entry]")
-    (apps / "brave-browser.desktop").write_text("[Desktop Entry]")
+    program = tmp_path / "google-chrome-stable"
+    program.write_text("")
+    (apps / "google-chrome.desktop").write_text(f"[Desktop Entry]\nExec={program} %U\n")
     monkeypatch.setattr(app_module, "APP_DIRS", [apps])
-    assert app_module.companion_browser(tmp_path) is None
-    brave = tmp_path / ".config/BraveSoftware/Brave-Browser/Default"
-    brave.mkdir(parents=True)
-    (brave / "Preferences").write_text('{"x": "' + app_module.EXTENSION_ID + '"}')
-    assert app_module.companion_browser(tmp_path) == "brave-browser.desktop"
+    root = tmp_path / ".config/google-chrome"
+    for folder in ("Default", "Profile 1", "System Profile"):
+        (root / folder).mkdir(parents=True)
+        (root / folder / "Preferences").write_text("{}")
+    (root / "Local State").write_text(
+        json.dumps(
+            {
+                "profile": {
+                    "last_used": "Profile 1",
+                    "info_cache": {"Default": {"name": "Me"}, "Profile 1": {"name": "Work"}},
+                }
+            }
+        )
+    )
+    assert app_module.pick_browser(home=tmp_path) is None  # no companion anywhere
+    (root / "Default/Preferences").write_text(app_module.EXTENSION_ID)
+    picked = app_module.pick_browser(home=tmp_path)
+    assert (picked["profile"], picked["name"], picked["program"]) == ("Default", "Me", str(program))
+    assert "System Profile" not in [p["profile"] for p in app_module.browser_profiles(tmp_path)]
+    chosen = app_module.pick_browser("google-chrome.desktop|Profile 1", tmp_path)
+    assert chosen["name"] == "Work" and not chosen["companion"]
+
+
+def test_browser_setting_api(client):
+    assert client.put("/api/settings/browser", json={"id": "nope|x"}).status_code == 404
+    assert client.put("/api/settings/browser", json={"id": None}).status_code == 200
+    assert client.get("/api/state").json()["browser_choice"] is None
