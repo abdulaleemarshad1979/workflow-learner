@@ -57,6 +57,16 @@ The extension operates in your existing browser profile, so you keep your normal
 
 Loading an unpacked extension and approving its browser permissions is a one-time browser setup step. The repository being installed does **not** mean the extension is already installed in your personal Brave profile.
 
+### Which browser replays run in
+
+You can install the companion in Chrome **and** Brave; both record. Replays go to **one** browser profile, chosen under **Setup & privacy → Browser and profile for replays**. The default is *Automatic*: the profile with the companion that you used most recently.
+
+- If that browser is closed, Workflow Learner opens it **directly in that profile** (`--profile-directory=…`), so Chrome's "Who's using Chrome?" picker does not block the replay.
+- The replay tab is brought to the front, even if you started the run from another browser.
+- If the companion still has not connected after 60 seconds, the run fails with a message instead of waiting forever.
+- **Run history → Execution log** shows which browser ran each step.
+- The companion reloads itself when the app ships a newer version (from v0.3.0 on). Older copies need one manual **Reload** in `chrome://extensions` / `brave://extensions`.
+
 ## Teach → review → replay
 
 1. Click **Teach a workflow**, give the routine a name, and optionally restrict it to exact origins such as `https://mail.google.com` and `https://docs.google.com`.
