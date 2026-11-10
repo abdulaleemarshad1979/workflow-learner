@@ -26,7 +26,7 @@ function autopilotText(w) {
   return `<p class="ap-on">● Autopilot on · ${when}${ap.last_started ? ' · last ' + esc(new Date(ap.last_started * 1000).toLocaleString()) : ''}</p>`;
 }
 function card(w) {
-  return `<article class="card"><div class="card-icon">⇄</div><span class="tag">${w.reviewed ? 'Reviewed · ready to replay' : 'Needs your review'}</span>${autopilotText(w)}<h3>${esc(w.name)}</h3><p>${w.steps.length} steps · ${w.demonstrations} demonstrations · revision ${w.revision}</p><p>${w.successes} completed runs · ${w.failures} failed runs</p><div class="card-actions"><button data-edit="${w.id}">Edit steps</button><button data-teach="${w.id}">Teach again</button>${!w.reviewed ? `<button data-review="${w.id}">Mark reviewed</button>` : ''}<button data-autopilot="${w.id}">Autopilot</button><button class="primary" data-run="${w.id}">Replay ↗</button></div></article>`;
+  return `<article class="card"><div class="card-icon">⇄</div><span class="tag">${w.reviewed ? 'Reviewed · ready to replay' : 'Needs your review'}</span>${autopilotText(w)}<h3>${esc(w.name)}</h3><p>${w.steps.length} steps · ${w.demonstrations} demonstrations · revision ${w.revision}</p><p>${w.successes} completed runs · ${w.failures} failed runs</p><div class="card-actions"><button data-edit="${w.id}">Edit steps</button><button data-teach="${w.id}">Teach again</button>${!w.reviewed ? `<button data-review="${w.id}">Mark reviewed</button>` : ''}<button data-autopilot="${w.id}">Autopilot</button><button class="primary" data-run="${w.id}">Replay ↗</button><button class="danger" data-delete="${w.id}" aria-label="Delete ${esc(w.name)}">Delete</button></div></article>`;
 }
 function setHTML(el, value) { if (el._rendered !== value) { el.innerHTML = value; el._rendered = value; } }
 function render() {
@@ -106,6 +106,12 @@ document.addEventListener('click', async event => {
     if (b.dataset.teach) openRecord(b.dataset.teach);
     if (b.dataset.run) run(b.dataset.run);
     if (b.dataset.autopilot) autopilot(b.dataset.autopilot);
+    if (b.dataset.delete) {
+      const w = data.workflows.find(w => w.id === b.dataset.delete);
+      if (confirm(`Delete “${w.name}”?\n\nThis removes its steps, demonstrations, revisions, saved inputs, autopilot schedule and run history. It cannot be undone.`)) {
+        await api('workflows/' + w.id, 'DELETE'); toast(`Deleted “${w.name}”.`); await refresh();
+      }
+    }
     if (b.dataset.adopt !== undefined) {
       const name = prompt('Name this learned routine', 'Learned routine');
       if (name) { await api(`patterns/${b.dataset.adopt}/adopt`, 'POST', {name}); toast('Saved. Review its steps, then turn on autopilot.'); view('workflows'); await refresh(); }
