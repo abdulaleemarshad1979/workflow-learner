@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Workflow Learner film</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&display=block" rel="stylesheet">
+<style>
+:root{--bg:#0b1f18;--ink:#f4f1e4;--muted:#a9bcb1;--green:#2f8a66;--mint:#7fd3a8;--gold:#e9cf7a;--coral:#f28b82;--card:#13302a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--ink)}
+#stage{position:absolute;inset:0;overflow:hidden;
+  background:radial-gradient(1100px 700px at 15% 10%,#1d4a3a 0%,transparent 60%),radial-gradient(900px 700px at 90% 95%,#173d33 0%,transparent 60%),var(--bg)}
+#grain{position:absolute;inset:0;opacity:.06;background-image:radial-gradient(#fff 1px,transparent 1px);background-size:4px 4px;pointer-events:none}
+.scene{position:absolute;inset:0;opacity:0}
+.a{will-change:transform,opacity}
+.serif{font-family:'Instrument Serif',Georgia,serif;font-weight:400;letter-spacing:-.5px}
+.pill{display:inline-flex;align-items:center;gap:12px;font:700 18px Inter;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+.pill i{display:inline-block;width:34px;height:2px;background:var(--gold)}
+.left{position:absolute;left:110px;top:250px;width:560px}
+.left h2{font-size:84px;line-height:1.02;margin:26px 0 24px}
+.left p{font-size:28px;line-height:1.45;color:var(--muted)}
+.shotwrap{position:absolute;left:720px;top:150px;width:1110px;height:694px;border-radius:22px;overflow:hidden;
+  box-shadow:0 40px 120px #000a,0 0 0 1px #ffffff22;background:#f8f9f5}
+.cam{position:absolute;left:0;top:0;width:1600px;height:1000px;transform-origin:0 0}
+.cam img{position:absolute;left:0;top:0;width:1600px;height:1000px}
+.cursor{position:absolute;width:44px;height:44px;left:0;top:0;filter:drop-shadow(0 6px 10px #0006);z-index:5}
+.ripple{position:absolute;width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;border:5px solid var(--green);opacity:0;z-index:4}
+.hl{position:absolute;border:4px solid #e2b93b;border-radius:10px;box-shadow:0 0 0 9999px #0b1f1826,0 0 30px #e2b93baa;z-index:3}
+.float{position:absolute;background:#fffdf6;color:#183e33;border-radius:16px;box-shadow:0 25px 70px #0008;padding:22px 26px;z-index:6}
+.float h4{font:700 15px Inter;letter-spacing:2px;color:#6b8a76;margin-bottom:12px}
+.steprow{display:flex;align-items:center;gap:14px;font:600 22px Inter;padding:7px 0}
+.steprow b{width:30px;height:30px;border-radius:50%;background:#e4ecdf;color:#2f6b52;font:700 15px Inter;display:grid;place-items:center}
+.chip{position:absolute;border-radius:999px;padding:14px 24px;font:700 22px Inter;z-index:6;box-shadow:0 18px 50px #0007}
+.tile{position:absolute;width:330px;height:250px;border-radius:24px;background:linear-gradient(160deg,#173b31,#10291f);border:1px solid #ffffff1c;
+  box-shadow:0 30px 80px #0007;padding:30px}
+.tile svg{width:58px;height:58px;stroke:var(--mint);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tile h3{font:700 30px Inter;margin:20px 0 14px}
+.line{height:12px;border-radius:6px;background:#ffffff1a;margin:9px 0}
+.mini{position:absolute;width:150px;height:100px;border-radius:14px;background:#163a30;border:1px solid #ffffff18;display:grid;place-items:center}
+.mini svg{width:40px;height:40px;stroke:#d9a49e;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.day{position:absolute;left:300px;width:120px;font:700 24px 'JetBrains Mono';color:#d9a49e;letter-spacing:2px}
+.center{position:absolute;left:0;right:0;text-align:center}
+.logo{width:170px;height:170px;border-radius:40px;background:#1f4c3b;border:2px solid #e9cf7a66;display:grid;place-items:center;position:relative;box-shadow:0 30px 90px #0009}
+.logo span{font:400 120px 'Instrument Serif';color:#f5efc5;margin-top:-12px}
+.logo em{position:absolute;right:20px;top:14px;font:600 48px Inter;color:#f5efc5;font-style:normal}
+.usetile{position:absolute;width:500px;height:190px;border-radius:24px;background:#12302a;border:1px solid #ffffff1c;padding:30px 34px;display:flex;gap:26px;align-items:center;box-shadow:0 25px 70px #0006}
+.usetile svg{width:64px;height:64px;flex:none;stroke:var(--gold);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.usetile h3{font:700 32px Inter;line-height:1.15}
+.usetile p{font:500 21px Inter;color:var(--muted);margin-top:8px}
+.priv{display:flex;align-items:center;gap:22px;font:600 40px Inter;margin:22px 0}
+.priv b{width:54px;height:54px;border-radius:50%;background:#1f4c3b;color:var(--mint);display:grid;place-items:center;font:700 30px Inter;flex:none}
+#captions{position:absolute;left:0;right:0;bottom:58px;text-align:center;z-index:50;pointer-events:none}
+#captions span.box{display:inline-block;background:#06140fd9;border:1px solid #ffffff1a;padding:14px 30px;border-radius:16px;font:700 40px Inter;letter-spacing:-.3px;color:#fff;box-shadow:0 12px 40px #0008}
+#captions .w{opacity:.55}
+#captions .w.on{opacity:1;color:var(--gold)}
+#captions .w.done{opacity:1}
+#progress{position:absolute;left:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--green),var(--gold));z-index:60}
+</style></head>
+<body><div id="stage"><div id="grain"></div>
+
+<!-- 1 HOOK -->
+<section class="scene" id="s-hook">
+  <div class="center a" data-in="0.05" style="top:150px"><h1 class="serif" style="font-size:118px">Every morning.</h1></div>
+  <div class="center a" data-in="w:same" style="top:300px;font:500 34px Inter;color:var(--muted)">The same routine.</div>
+  <div class="tile a" data-in="w:invoice" style="left:170px;top:470px"><svg viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7M9 8h3"/></svg><h3>Invoice</h3><div class="line" style="width:80%"></div><div class="line" style="width:55%"></div></div>
+  <div class="tile a" data-in="w:spreadsheet" style="left:580px;top:470px"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg><h3>Spreadsheet</h3><div class="line" style="width:70%"></div><div class="line" style="width:85%"></div></div>
+  <div class="tile a" data-in="w:email" style="left:990px;top:470px"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/></svg><h3>Email</h3><div class="line" style="width:60%"></div><div class="line" style="width:90%"></div></div>
+  <div class="tile a" data-in="w:accounting" style="left:1400px;top:470px"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="m15 16 1.5 1.5L19 15"/></svg><h3>Accounting</h3><div class="line" style="width:75%"></div><div class="line" style="width:50%"></div></div>
+</section>
+
+<!-- 2 PROBLEM -->
+<section class="scene" id="s-problem">
+  <div id="grid"></div>
+  <div class="center a" data-in="w:quietly" style="top:330px;z-index:5">
+    <h1 class="serif" style="font-size:150px;color:var(--coral);text-shadow:0 10px 60px #000">Hours, every week.</h1>
+    <p style="font:500 36px Inter;color:var(--ink);margin-top:14px;text-shadow:0 6px 30px #000">on work your computer could do for you.</p>
+  </div>
+</section>
+
+<!-- 3 INTRO -->
+<section class="scene" id="s-intro">
+  <div class="a" data-in="0.1" data-pop="1" style="position:absolute;left:875px;top:190px"><div class="logo"><span>w</span><em>↗</em></div></div>
+  <div class="center a" data-in="w:Workflow" style="top:400px"><h1 class="serif" style="font-size:150px">Workflow Learner</h1></div>
+  <div class="center a" data-in="w:show" style="top:600px;font:500 42px Inter;color:var(--gold)">Show it once. It learns the steps. It does them for you.</div>
+  <div class="center a" data-in="w:does" style="top:700px;font:700 22px Inter;letter-spacing:5px;color:var(--muted)">OBSERVE &nbsp;→&nbsp; LEARN &nbsp;→&nbsp; REPLAY &nbsp;→&nbsp; AUTOPILOT</div>
+</section>
+
+<!-- 4 TEACH -->
+<section class="scene" id="s-teach">
+  <div class="left">
+    <div class="pill a" data-in="0.05"><i></i>Step 1 · Teach</div>
+    <h2 class="serif a" data-in="0.25">Show it once.</h2>
+    <p class="a" data-in="w:simply">Work the way you always do: Chrome, Brave or your desktop apps.</p>
+    <p class="a" data-in="w:every" style="margin-top:22px;color:var(--ink)">Every page, field and click becomes an <span style="color:var(--gold)">editable step</span>.</p>
+  </div>
+  <div class="shotwrap a" data-in="0">
+    <div class="cam" data-cam='[[0,0.69375,0,0],[1.4,0.85,-260,-20],[2.0,0.69375,0,0]]'>
+      <img src="footage/overview.png">
+      <img src="footage/teach-dialog.png" class="layer" data-show="1.55" data-hide="3.3">
+      <img src="footage/work-invoice.png" class="layer" data-show="3.3">
+      <div class="cursor" data-path='[[0.2,1150,620],[1.1,1440,182,1],[1.9,1300,420],[2.7,983,687,1],[3.2,1100,800]]'><svg viewBox="0 0 24 24" width="44" height="44"><path d="M4 2l16 9-7 2-3 7z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+    </div>
+  </div>
+  <div class="chip a" data-in="3.4" style="left:1600px;top:118px;background:#be384a;color:#fff">● REC</div>
+  <div class="float a" data-in="w:every" style="left:600px;top:560px;width:420px">
+    <h4>STEPS CAPTURED · <span id="teach-count">0</span></h4>
+    <div id="teach-steps"></div>
+  </div>
+</section>
+
+<!-- 5 LEARN -->
+<section class="scene" id="s-learn">
+  <div class="left">
+    <div class="pill a" data-in="0.05"><i></i>Step 2 · Learn</div>
+    <h2 class="serif a" data-in="0.25" data-hide="w:twice">Your values become inputs.</h2>
+    <h2 class="serif a" data-in="w:twice" style="position:absolute;top:44px">It spots the pattern.</h2>
+    <p class="a" data-in="w:tomorrow's" data-hide="w:twice">The same routine works for tomorrow's invoice.</p>
+    <p class="a" data-in="w:spots" style="position:absolute;top:240px">Sequences you repeat show up in Learned patterns.</p>
+  </div>
+  <div class="shotwrap a" data-in="0">
+    <div class="cam" data-cam='[[0,0.69375,0,0],[1.2,1.2,-651,-479],[6.8,1.2,-651,-479],[7.5,0.69375,0,0]]'>
+      <img src="footage/editor.png">
+      <div class="hl" data-box="editor.param" data-in="1.4" data-hide="w:twice"></div>
+      <img src="footage/patterns.png" class="layer" data-show="w:twice">
+    </div>
+  </div>
+  <div class="chip a" data-in="1.8" data-hide="w:twice" style="left:1180px;top:780px;background:#fffdf6;color:#183e33">{{invoice_number}} → INV-2026-118</div>
+  <div class="chip a" data-in="w:pattern" style="left:1260px;top:780px;background:var(--gold);color:#183e33">Seen in 3 demonstrations</div>
+</section>
+
+<!-- 6 REPLAY -->
+<section class="scene" id="s-replay">
+  <div class="left">
+    <div class="pill a" data-in="0.05"><i></i>Step 3 · Replay</div>
+    <h2 class="serif a" data-in="0.25">Press Replay. It does the rest.</h2>
+    <p class="a" data-in="w:Bypass"><span style="color:var(--gold)">Bypass mode</span>: hands-free, no approvals, every step in order.</p>
+  </div>
+  <div class="shotwrap a" data-in="0">
+    <div class="cam" data-cam='[[0,0.69375,0,0],[0.6,0.95,-200,0],[2.2,0.95,-200,0],[2.8,0.95,-400,-300],[3.7,0.69375,0,0]]'>
+      <img src="footage/run-dialog.png">
+      <div class="hl" data-box="run.mode" data-in="w:Bypass" data-hide="3.6"></div>
+      <img src="footage/run-banner.png" class="layer" data-show="3.6" data-hide="w:fills">
+      <img src="footage/work-done.png" class="layer" data-show="w:fills">
+      <div class="cursor" data-path='[[0.3,1100,700],[1.6,800,200],[2.3,800,200],[3.1,995,870,1],[3.5,1050,900]]'><svg viewBox="0 0 24 24" width="44" height="44"><path d="M4 2l16 9-7 2-3 7z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+    </div>
+  </div>
+  <div class="float a" data-in="w:opens" style="left:600px;top:600px;width:430px">
+    <h4>RUNNING · BYPASS MODE</h4>
+    <div style="height:14px;border-radius:7px;background:#e4ecdf;overflow:hidden"><div id="replay-bar" style="height:100%;width:0;background:linear-gradient(90deg,#2f8a66,#7fd3a8)"></div></div>
+    <div class="steprow" style="margin-top:12px"><b>✓</b><span id="replay-step">Open invoices</span></div>
+    <div style="font:600 18px Inter;color:#6b8a76" id="replay-count">Step 1 of 10</div>
+  </div>
+</section>
+
+<!-- 7 AUTOPILOT -->
+<section class="scene" id="s-autopilot">
+  <div class="left">
+    <div class="pill a" data-in="0.05"><i></i>Step 4 · Autopilot</div>
+    <h2 class="serif a" data-in="0.25">Then it runs on its own.</h2>
+    <p class="a" data-in="w:Every">Every hour, or every morning at nine.</p>
+    <p class="a" data-in="w:website" style="margin-top:22px;color:var(--ink)">Something changed? It <span style="color:var(--coral)">stops and tells you</span>. No guessing.</p>
+  </div>
+  <div class="shotwrap a" data-in="0">
+    <div class="cam" data-cam='[[0,0.69375,0,0],[0.8,0.95,-300,-60],[4.4,0.95,-300,-60],[5.0,0.95,-300,-160],[6.6,0.95,-300,-160],[7.3,1.5,-1000,-560],[12,1.5,-1000,-560]]'>
+      <img src="footage/autopilot-dialog.png">
+      <div class="hl" data-box="ap.enabled" data-pad="10" data-in="w:Autopilot" data-hide="4.6"></div>
+      <div class="hl" data-box="ap.daily" data-in="w:nine" data-hide="7.0"></div>
+      <img src="footage/run-banner.png" class="layer" data-show="7.0">
+      <div class="hl" data-box="card.autopilot" data-pad="8" data-in="7.6"></div>
+    </div>
+  </div>
+  <div class="chip a" data-in="w:website" style="left:1120px;top:790px;background:#fae7e3;color:#8e302c">Website changed · run stopped · nothing guessed</div>
+</section>
+
+<!-- 8 PRIVATE -->
+<section class="scene" id="s-private">
+  <div class="a" data-in="0.05" data-pop="1" style="position:absolute;left:180px;top:300px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,#2f8a6644,transparent 70%);display:grid;place-items:center">
+    <svg viewBox="0 0 24 24" width="230" height="230" style="stroke:var(--mint);fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6"/></svg>
+  </div>
+  <div style="position:absolute;left:720px;top:230px;width:1100px">
+    <h1 class="serif a" data-in="0.1" style="font-size:96px;line-height:1.05;margin-bottom:40px">Everything stays on your computer.</h1>
+    <div class="priv a" data-in="w:cloud"><b>✓</b>No cloud AI</div>
+    <div class="priv a" data-in="w:telemetry"><b>✓</b>No telemetry</div>
+    <div class="priv a" data-in="w:Passwords"><b>✓</b>Passwords &amp; login pages never recorded</div>
+  </div>
+</section>
+
+<!-- 9 USES -->
+<section class="scene" id="s-uses">
+  <div class="center a" data-in="0.05" style="top:120px"><h1 class="serif" style="font-size:92px">Use it for…</h1></div>
+  <div class="usetile a" data-in="w:invoices" style="left:160px;top:320px"><svg viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></svg><div><h3>Invoices &amp; billing</h3><p>Create, record, send</p></div></div>
+  <div class="usetile a" data-in="w:Spreadsheet" style="left:710px;top:320px"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg><div><h3>Sheets &amp; reports</h3><p>Update, export, share</p></div></div>
+  <div class="usetile a" data-in="w:Email" style="left:1260px;top:320px"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/></svg><div><h3>Email follow-ups</h3><p>Same message, new details</p></div></div>
+  <div class="usetile a" data-in="w:Accounting" style="left:160px;top:550px"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><div><h3>Accounting entries</h3><p>Post and reconcile</p></div></div>
+  <div class="usetile a" data-in="w:CRM" style="left:710px;top:550px"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 6 4.5"/></svg><div><h3>CRM updates</h3><p>Leads, status, notes</p></div></div>
+  <div class="usetile a" data-in="w:data" style="left:1260px;top:550px"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 8h6M7 12h10"/></svg><div><h3>Data entry</h3><p>Across portals and apps</p></div></div>
+  <div class="center a" data-in="w:Any" style="top:800px;font:600 44px Inter;color:var(--gold)">Any routine you repeat.</div>
+</section>
+
+<!-- 10 OUTRO -->
+<section class="scene" id="s-outro">
+  <div class="center a" data-in="0.05" data-hide="w:Workflow" style="top:300px"><h1 class="serif" style="font-size:120px">Your time is for thinking,</h1></div>
+  <div class="center a" data-in="w:not" data-hide="w:Workflow" style="top:450px"><h1 class="serif" style="font-size:120px;color:var(--gold)">not clicking.</h1></div>
+  <div class="center a" data-in="w:Show" data-hide="w:Workflow" style="top:640px;font:600 46px Inter">Show it once. Let it run.</div>
+  <div class="a" data-in="w:Workflow" data-pop="1" style="position:absolute;left:875px;top:170px"><div class="logo"><span>w</span><em>↗</em></div></div>
+  <div class="center a" data-in="w:Workflow" style="top:380px"><h1 class="serif" style="font-size:140px">Workflow Learner</h1></div>
+  <div class="center a" data-in="w:Learner" style="top:570px;font:600 40px Inter;color:var(--gold)">Show it once. Let it run.</div>
+  <div class="center a" data-in="7.2" style="top:690px;font:500 30px Inter;color:var(--muted)">Local-first workflow automation · Linux · Chrome &amp; Brave</div>
+  <div class="center a" data-in="8.0" style="top:790px"><span style="display:inline-block;border:2px solid var(--gold);border-radius:999px;padding:18px 40px;font:700 34px Inter;color:var(--ink)">What would you automate first? Tell me in the comments ↓</span></div>
+</section>
+
+<div id="captions"></div><div id="progress"></div>
+</div>
+
+<script>
+const SCRIPT = window.__SCRIPT__;
+const BOXES = window.__BOXES__;
+const LEAD = {hook:0.6};            // seconds before the voice starts in each scene
+const TAIL = {intro:1.4, outro:4.6, uses:1.4, teach:1.2, problem:1.2};
+const FADE = 0.45;
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 4);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+
+// Timeline
+let T0 = 0;
+const scenes = SCRIPT.map(s => {
+  const lead = LEAD[s.id] ?? 0.35, dur = lead + s.audio + (TAIL[s.id] ?? 0.95);
+  const sc = {...s, lead, start: T0, dur, el: document.getElementById('s-' + s.id)};
+  T0 += dur;
+  return sc;
+});
+window.TOTAL = T0;
+window.VOICE = scenes.map(s => ({id: s.id, at: +(s.start + s.lead).toFixed(3)}));
+
+function wordTime(sc, key) {
+  // "w:word" or "w:word#2" -> local seconds when the word starts being spoken
+  const [w, nth] = key.slice(2).split('#');
+  const hits = sc.words.filter(x => x.w.toLowerCase().replace(/[^a-z']/g, '') === w.toLowerCase());
+  const hit = hits[(+nth || 1) - 1];
+  if (!hit) throw new Error('word not found: ' + key + ' in ' + sc.id);
+  return sc.lead + hit.t;
+}
+const resolve = (sc, v) => v == null ? null : String(v).startsWith('w:') ? wordTime(sc, v) : parseFloat(v);
+
+// Prepare elements
+for (const sc of scenes) {
+  sc.items = [...sc.el.querySelectorAll('[data-in],[data-show]')].map(el => ({
+    el, tin: resolve(sc, el.dataset.in ?? el.dataset.show), tout: resolve(sc, el.dataset.hide),
+    layer: el.classList.contains('layer'), pop: !!el.dataset.pop, hl: el.classList.contains('hl')
+  }));
+  sc.el.querySelectorAll('[data-box]').forEach(el => {
+    const b = BOXES[el.dataset.box], pad = +(el.dataset.pad || 6);
+    Object.assign(el.style, {left: b.x - pad + 'px', top: b.y - pad + 'px', width: b.width + 2 * pad + 'px', height: b.height + 2 * pad + 'px'});
+  });
+  sc.cams = [...sc.el.querySelectorAll('.cam')].map(el => ({el, keys: JSON.parse(el.dataset.cam)}));
+  sc.cursors = [...sc.el.querySelectorAll('.cursor')].map(el => {
+    const keys = JSON.parse(el.dataset.path);
+    const ripples = keys.filter(k => k[3]).map(k => { const r = document.createElement('div'); r.className = 'ripple'; el.parentNode.appendChild(r); return {r, k}; });
+    return {el, keys, ripples};
+  });
+}
+
+function interp(keys, t) {
+  if (t <= keys[0][0]) return keys[0].slice(1);
+  for (let i = 1; i < keys.length; i++) {
+    if (t <= keys[i][0]) {
+      const a = keys[i - 1], b = keys[i], f = ease((t - a[0]) / (b[0] - a[0]));
+      return a.slice(1).map((v, j) => v + (b[j + 1] - v) * f);
+    }
+  }
+  return keys[keys.length - 1].slice(1);
+}
+
+// Problem grid: 5 days x 4 apps
+const ICONS = ['<path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7"/>', '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/>', '<path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/>'];
+const grid = document.getElementById('grid');
+const problem = scenes.find(s => s.id === 'problem');
+const dayTimes = ['w:Same', 'w:Same#2', 'w:Same#3', 'w:Every', 'w:single'].map(k => wordTime(problem, k));
+['MON', 'TUE', 'WED', 'THU', 'FRI'].forEach((d, r) => {
+  const day = document.createElement('div'); day.className = 'day a'; day.textContent = d; day.style.top = (150 + r * 150 + 36) + 'px';
+  day.dataset.in = dayTimes[r]; grid.appendChild(day);
+  ICONS.forEach((ic, c) => {
+    const m = document.createElement('div'); m.className = 'mini a'; m.style.left = (460 + c * 300) + 'px'; m.style.top = (150 + r * 150) + 'px';
+    m.innerHTML = `<svg viewBox="0 0 24 24">${ic}</svg>`; m.dataset.in = dayTimes[r] + c * 0.08; grid.appendChild(m);
+    if (c < 3) { const ar = document.createElement('div'); ar.className = 'a'; ar.dataset.in = dayTimes[r] + c * 0.08; Object.assign(ar.style, {position: 'absolute', left: (460 + c * 300 + 170) + 'px', top: (150 + r * 150 + 28) + 'px', font: '600 34px Inter', color: '#d9a49e88'}); ar.textContent = '→'; grid.appendChild(ar); }
+  });
+});
+problem.items = [...problem.el.querySelectorAll('[data-in]')].map(el => ({el, tin: resolve(problem, el.dataset.in), tout: null}));
+const hoursAt = wordTime(problem, 'w:quietly');
+
+// Teach step list
+const TEACH_STEPS = ['Open invoices', 'Invoice number', 'Customer', 'Amount', 'Add invoice to sheet', 'Recipient', 'Message'];
+const teach = scenes.find(s => s.id === 'teach');
+const teachStart = wordTime(teach, 'w:every') + 0.3, teachEnd = teach.lead + teach.audio + 0.2;
+document.getElementById('teach-steps').innerHTML = TEACH_STEPS.map((s, i) => `<div class="steprow a" id="ts${i}"><b>${i + 1}</b>${s}</div>`).join('');
+TEACH_STEPS.forEach((s, i) => teach.items.push({el: document.getElementById('ts' + i), tin: teachStart + i * (teachEnd - teachStart) / TEACH_STEPS.length, tout: null, collapse: true}));
+
+const REPLAY_STEPS = ['Open invoices', 'Invoice number', 'Customer', 'Amount', 'Add invoice to sheet', 'Recipient', 'Message', 'Send invoice email', 'Mark invoice as recorded', 'Post to accounting'];
+const replay = scenes.find(s => s.id === 'replay');
+const repStart = wordTime(replay, 'w:opens'), repEnd = replay.lead + replay.audio + 0.4;
+
+// Captions: chunk words into short phrases
+const chunks = [];
+for (const sc of scenes) {
+  let cur = [];
+  sc.words.forEach((w, i) => {
+    const abs = sc.start + sc.lead + w.t;
+    const prev = sc.words[i - 1];
+    const gap = prev ? w.t - (prev.t + prev.d) : 0;
+    if (cur.length && (cur.length >= 6 || gap > 0.22)) { chunks.push(cur); cur = []; }
+    cur.push({w: w.w, t: abs, e: abs + w.d});
+  });
+  if (cur.length) chunks.push(cur);
+}
+const capEl = document.getElementById('captions');
+let lastCap = '';
+
+function render(T) {
+  for (const sc of scenes) {
+    const t = T - sc.start;
+    const isLast = sc === scenes[scenes.length - 1];
+    const vis = clamp((t + FADE) / FADE) * (isLast ? 1 : clamp((sc.dur - t) / FADE));
+    sc.el.style.opacity = vis;
+    sc.el.style.display = vis > 0 ? 'block' : 'none';
+    if (vis <= 0) continue;
+    for (const it of sc.items) {
+      const p = it.tin == null ? 1 : ease((t - it.tin) / (it.layer ? 0.45 : 0.75));
+      const o = it.tout == null ? 1 : 1 - ease((t - it.tout) / 0.4);
+      const k = clamp(p) * clamp(o);
+      it.el.style.opacity = k;
+      if (it.collapse) it.el.style.display = k > 0 ? 'flex' : 'none';
+      if (it.layer || it.hl) continue;
+      if (it.pop) it.el.style.transform = `scale(${0.6 + 0.4 * clamp(p)})`;
+      else if (!it.el.classList.contains('shotwrap')) it.el.style.transform = `translateY(${(1 - clamp(p)) * 34}px)`;
+      else it.el.style.transform = `translateY(${(1 - clamp(p)) * 60}px) scale(${0.96 + 0.04 * clamp(p)})`;
+    }
+    for (const c of sc.cams) {
+      const [s, x, y] = interp(c.keys, t);
+      c.el.style.transform = `translate(${x}px,${y}px) scale(${s})`;
+    }
+    for (const cu of sc.cursors) {
+      const [x, y] = interp(cu.keys, t);
+      cu.el.style.transform = `translate(${x}px,${y}px)`;
+      cu.el.style.opacity = clamp((t - cu.keys[0][0] + 0.3) / 0.3) * clamp((cu.keys[cu.keys.length - 1][0] + 0.6 - t) / 0.4);
+      for (const {r, k} of cu.ripples) {
+        const q = (t - k[0]) / 0.6;
+        r.style.left = k[1] + 'px'; r.style.top = k[2] + 'px';
+        r.style.opacity = q > 0 && q < 1 ? 1 - q : 0;
+        r.style.transform = `scale(${0.3 + q})`;
+      }
+    }
+    if (sc.id === 'problem') {
+      document.getElementById('grid').style.opacity = 1 - 0.75 * clamp((t - hoursAt) / 0.6);
+      document.getElementById('grid').style.filter = `blur(${4 * clamp((t - hoursAt) / 0.6)}px)`;
+    }
+    if (sc.id === 'teach') {
+      const n = TEACH_STEPS.filter((s, i) => t >= teachStart + i * (teachEnd - teachStart) / TEACH_STEPS.length).length;
+      document.getElementById('teach-count').textContent = n;
+    }
+    if (sc.id === 'replay') {
+      const f = clamp((t - repStart) / (repEnd - repStart));
+      const i = Math.min(9, Math.floor(f * 10));
+      document.getElementById('replay-bar').style.width = (f * 100) + '%';
+      document.getElementById('replay-step').textContent = REPLAY_STEPS[i];
+      document.getElementById('replay-count').textContent = f >= 1 ? 'All 10 steps done · no approvals' : `Step ${i + 1} of 10`;
+    }
+  }
+  // captions
+  const ch = chunks.find(c => T >= c[0].t - 0.05 && T <= c[c.length - 1].e + 0.35);
+  const html = ch ? '<span class="box">' + ch.map(w => `<span class="w ${T >= w.t && T < w.e + 0.05 ? 'on' : T >= w.e ? 'done' : ''}">${w.w}</span>`).join(' ') + '</span>' : '';
+  if (html !== lastCap) { capEl.innerHTML = html; lastCap = html; }
+  document.getElementById('progress').style.width = (T / TOTAL * 100) + '%';
+}
+window.render = render;
+render(0);
+</script></body></html>
