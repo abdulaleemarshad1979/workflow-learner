@@ -2,6 +2,49 @@
 
 **Video:** `docs/workflow-learner-linkedin.mp4` (1920×1080, 2:00, natural voiceover by en-US-AndrewMultilingualNeural, burned-in captions)
 
+## ✅ Final post (with repo), copy everything between the lines
+
+---
+
+Every morning, I did the same routine.
+
+Open the invoice. Copy it into a spreadsheet. Write the email. Post it to accounting.
+
+Same apps. Same clicks. Same fields. Every single day.
+
+So I built **Workflow Learner**, an open-source tool that watches how you do a task once and then does it for you. 🚀
+
+🔧 How it works:
+1️⃣ Teach: click "Teach a workflow" and work as you normally do in Chrome, Brave or your desktop apps. Every page, field and click becomes an editable step.
+2️⃣ Learn: values you type become reusable inputs, so the same routine works for tomorrow's invoice. Repeat a task and it spots the pattern.
+3️⃣ Replay: one click. Bypass mode runs the whole sequence hands-free.
+4️⃣ Autopilot: schedule it every hour or every morning at 9. If a website changes, it stops and tells you instead of guessing.
+
+🔒 Privacy first: everything runs on your own computer.
+No cloud AI. No telemetry. Passwords and login pages are never recorded.
+
+💼 Where it helps:
+• Invoices & billing
+• Spreadsheet updates & reports
+• Email follow-ups
+• Accounting entries
+• CRM updates
+• Data entry across portals
+
+Your time is for thinking, not clicking.
+
+📂 GitHub: workflow-learner
+👉 https://github.com/abdulaleemarshad1979/workflow-learner
+
+⭐ Star it, try it, and tell me what breaks.
+👇 What's the one routine you'd automate first?
+
+#Automation #Productivity #WorkflowAutomation #OpenSource #Python #RPA #NoCode #Accounting #SmallBusiness #BuildInPublic
+
+---
+
+## Earlier draft
+
 ---
 
 Every morning I did the same routine.
