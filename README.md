@@ -1,8 +1,8 @@
 # Workflow Learner
 
-A local application that learns demonstrated routines and replays them with your guidance. Use it to connect browser tasks such as invoices, spreadsheets, email drafts, and accounting screens into a visible, editable sequence.
+A local application that learns demonstrated routines and replays them — guided, or fully automatic with no approvals. Use it to connect browser tasks such as invoices, spreadsheets, email drafts, and accounting screens into a visible, editable sequence.
 
-**This is a working v0.1, not a universal autonomous employee.** It learns ordered actions and repeated subsequences; it does not train an AI model or infer business rules. Browser controls and supported Linux accessibility controls can be replayed. Apps without accessible controls need manual steps or a dedicated adapter.
+**This is a working v0.2, not a universal autonomous employee.** It learns ordered actions and repeated subsequences; it does not train an AI model or infer business rules. Browser controls and supported Linux accessibility controls can be replayed. Apps without accessible controls need manual steps or a dedicated adapter.
 
 ![Dashboard after the automated practice test](docs/dashboard.png)
 
@@ -13,7 +13,8 @@ A local application that learns demonstrated routines and replays them with your
 - **Local dashboard:** http://127.0.0.1:8765
 - **Hosting:** local only. No Vercel deployment has been created, following your choice to keep it local.
 - **Application menu:** search for **Workflow Learner**.
-- **Browser setup:** load and pair the companion extension in your own Brave profile once, as described below.
+- **Background service:** starts at every login (`systemctl --user status workflow-learner`).
+- **Browser setup:** load the companion extension in your own Brave profile once; it pairs itself.
 - **Recording:** off until you explicitly start a demonstration.
 
 A website hosted on Vercel cannot, by itself, watch or control your desktop apps. A future hosted interface would still require a running, paired local service. The current installation does not require Vercel, an API key, a paid AI subscription, or a cloud database.
@@ -29,6 +30,14 @@ cd "/home/abdul-aleem-arshad-mohammed/Work/Workflow Learner"
 
 For another checkout, run `./start.sh` from its directory. The first launch creates a virtual environment and installs dependencies. The dashboard opens at **http://127.0.0.1:8765**. Keep its terminal open while using the app; Ctrl+C stops the service. No recording starts automatically. If the app is already running, use the dashboard URL directly. Launching it a second time opens the existing workspace without changing its recorded data.
 
+To keep it always running in the background (starts at login, restarts on failure; recommended for autopilot):
+
+```bash
+./scripts/install-autostart.sh
+# stop:    systemctl --user stop workflow-learner
+# remove:  systemctl --user disable --now workflow-learner
+```
+
 To add an application-menu launcher:
 
 ```bash
@@ -39,9 +48,10 @@ To add an application-menu launcher:
 
 1. Open `brave://extensions` (Chrome: `chrome://extensions`).
 2. Enable **Developer mode**, click **Load unpacked**, and select the repository's `extension` folder.
-3. In the dashboard, open **Setup & privacy** and click **Copy pairing key**.
-4. Open the Workflow Learner extension, paste the key, and click **Connect to local app**.
-5. Reload the websites you want to record. Sign in before recording.
+3. Done. The companion **pairs itself** within a few seconds; the dashboard header shows **● Browser companion connected** and the popup says **Connected**. No key to copy.
+4. Reload the websites you want to record. Sign in before recording.
+
+Already loaded an older copy? Click **Remove** on it, then **Load unpacked** again: v0.2 has a fixed extension ID (`ioonaammpiolcjejhgegdihpdplleanj`). The local app hands its key only to requests whose browser-enforced `Origin` is that ID, so websites cannot pair. Manual key pairing remains under the popup's *Manual pairing* fallback.
 
 The extension operates in your existing browser profile, so you keep your normal accounts and sessions. It requests access to HTTP/HTTPS sites to support your different websites. The service-worker/content-script design follows [Chrome's isolated content-script model](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts).
 
@@ -55,8 +65,18 @@ Loading an unpacked extension and approving its browser permissions is a one-tim
 4. Click **Stop & save**. Open **Edit steps** and inspect the sequence. Remove incidental clicks or add manual instructions.
 5. All captured text and select values become named `{{parameters}}`. Enter fresh values for each run. You can replace a parameter with an explicit fixed value in the editor.
 6. Keep **Ask first** enabled for steps that send messages, post financial records, delete items, or otherwise need your review. All recorded clicks, checks, and shortcuts default to asking first; the app does not guess business impact from a button label.
-7. Choose **Guided** to approve every step, or mark the revision reviewed and choose **Automatic**. Automatic replay continues between Ask-first/manual steps. It starts when you click **Start replay**; this version has no unattended event trigger or calendar scheduler.
+7. Click **Replay ↗**. The default mode is **Bypass — fully automatic, no approvals**. Values you type are remembered for next time. **Automatic** (stops at Ask-first steps, needs review) and **Guided** (approve every step) remain available.
 8. Use **Teach again** to capture a corrected demonstration. This creates a new revision, retains the old revision locally, and invalidates the prior review. Recurring sequences of 3–5 steps found in at least two saved demonstrations appear under **Learned patterns**.
+
+## Fully automatic: Bypass mode and Autopilot
+
+- **Bypass** runs every step — including send, submit, post, and delete — without asking, without the review gate, and skips manual note steps. The only stops are a failed step (missing control, changed website, no acknowledgement) and your **Stop** button on the run banner.
+- **Autopilot** (button on each workflow card) runs a workflow by itself in Bypass mode: every N minutes (≥5), once a day at a time, or only when you press **Run now**. Save the input values once in the same dialog; they are stored locally (`inputs` in the SQLite file) and reused every run.
+- Autopilot starts a run only when nothing else is recording or running, and waits for the Brave companion when the workflow has browser steps.
+- If a scheduled run fails, autopilot **pauses itself** (shown in red on the card) instead of repeating a half-finished routine. Fix or re-teach, then press **Save** in the Autopilot dialog to resume.
+- **Learned patterns → Save as workflow** turns a sequence seen in several demonstrations into a new workflow you can put on autopilot.
+
+Bypass trades safety for speed: a wrong recording executes wrongly. Test new workflows once in Guided mode, and use Teach again when a website changes.
 
 **Continuous learning means accumulating demonstrations while recording is on.** It does not mean hidden always-on screen capture. Pattern counts are evidence of repetition, not a safety score. A completed run means adapters acknowledged the recorded actions; verify the business result in the target application.
 
@@ -94,10 +114,10 @@ The app does not currently extract data from invoices and infer how to transform
 - **Begin work:** start the local app or open its already-running dashboard; check that the browser companion is connected.
 - **Teach something new:** start a named demonstration, complete the task, then stop/save. It can keep observing within that session until you stop or reach 1,000 steps.
 - **Protect a private interruption:** click **Pause** before switching to sensitive work. Click **Resume** when ready.
-- **Run an existing routine:** click **Replay**, choose Guided or Automatic, enter current values, and start. Browser replay opens new tabs in the paired profile.
+- **Run an existing routine:** click **Replay** (Bypass by default), adjust values or leave saved ones blank, and start. Or let **Autopilot** run it on schedule. Browser replay opens new tabs in the paired profile.
 - **Help the app:** complete a manual step yourself, then click **I completed this step**. For an Ask-first step, inspect the destination and click **Approve this step**.
 - **Stop a run:** click **Stop**. Previously completed actions remain completed; the app cannot undo them.
-- **End the day:** stop/save any recording, stop unfinished replay, then close the local service terminal or press Ctrl+C. The app does not install an automatic login/background recording service.
+- **End the day:** stop/save any recording, stop unfinished replay, then close the local service terminal or press Ctrl+C. With `install-autostart.sh` the service keeps running for autopilot; recording still only happens when you start it.
 
 ## Parameters and step editing
 
@@ -118,15 +138,17 @@ A parameter looks like `{{invoice_number_a1b2c}}`. Names are generated from a co
 |---|---|
 | Dashboard will not open | Run `./start.sh` from the project folder; check that its terminal stays open. Use `http://127.0.0.1:8765`, not an HTTPS URL. |
 | Port 8765 already in use | An instance may already be running. Open the dashboard. If another program owns that port, stop that program before launching Workflow Learner. |
-| Browser companion not connected / OFF badge | Start the local service, check the extension is enabled, and copy/paste the pairing key again from Setup & privacy. |
+| Browser companion not connected / OFF badge | Check `systemctl --user status workflow-learner`, that the extension is enabled, and that it is v0.2 (ID `ioonaammpiolcjejhgegdihpdplleanj`; remove and Load unpacked again if not). |
+| Autopilot paused | The last scheduled run failed; the card shows the error. Fix the workflow, then Save in the Autopilot dialog. |
+| Desktop workflow did nothing | Clicks in the GNOME dock/overview are skipped on replay (they are transient). Make sure the recording contains an **Open …** (`native_launch`) step for the app. |
 | Recording contains no browser steps | Reload your work tabs after installing the extension, wait a couple of seconds after starting recording, and check the origin allowlist. Browser internal pages and login screens are excluded. |
 | A field did not record | Password/private fields are excluded. Canvas/shadow widgets and file uploads are not generally supported. Add a manual step or use a dedicated adapter. |
 | Automatic mode is unavailable | Open the workflow, inspect its current revision, then mark it reviewed. Editing or teaching again resets review. |
-| Replay is waiting | It is in Guided mode, at an Ask-first checkpoint, or at a manual step. Complete the requested review or manual task. |
+| Replay is waiting | It is in Guided or Automatic mode at a checkpoint. Use Bypass to never wait. |
 | Control not found, label changed, or ambiguous target | Stop, inspect the current site, and teach or edit the affected step. The app will not guess another target. |
 | Keyboard step needs manual completion | Replace Enter/shortcut behavior with an explicit button click or a manual step. |
 | Desktop adapter unavailable | Verify system Python can import PyGObject and AT-SPI. On Debian/Ubuntu, the packages are `python3-gi` and `gir1.2-atspi-2.0`. |
-| Desktop control missing or ambiguous | Bring the target app forward. Its role/name must match uniquely. Apps without accessibility support require manual operation. |
+| Control '…' not found uniquely | Replay first tries the recorded accessibility path, then a unique role/name match, waiting up to 10 s for a just-launched app. If the app's layout changed, Teach again. Apps without accessibility support require manual operation. |
 | Command timed out / acknowledgement lost | Inspect the target app first: it may already have performed the action. Do not blindly rerun a send/post/payment step. |
 | Website accepts typed values but ignores replay | Some apps require trusted input, rich editing protocols, or specialized integrations. Use a manual step for that action. |
 | A run was interrupted after restart | The app intentionally does not resume side effects after a restart. Review what already happened before starting again. |
@@ -172,7 +194,7 @@ On Debian/Ubuntu, install `python3-gi` and `gir1.2-atspi-2.0` if the adapter rep
 | Contenteditable fields such as many email editors | Basic text replay; rich formatting/attachments require review |
 | Embedded frames | Exact frame URL matching; ambiguous/missing frames stop replay |
 | Repeated demonstrations / workflow revisions | Stored locally and mined for ordered subsequences |
-| Guided and automatic replay | Implemented with per-step review gates |
+| Guided, automatic, Bypass, scheduled Autopilot | Implemented; Bypass/Autopilot run with no approvals |
 | Linux desktop app focus/text/actions | AT-SPI adapter; application dependent |
 | Google Sheets canvas, Excel grids, drag-and-drop, file dialogs, downloads, shadow DOM | Manual steps or custom adapters needed |
 | Keyboard shortcuts / Enter submissions | Observed; replace with a button click or manual step for replay |

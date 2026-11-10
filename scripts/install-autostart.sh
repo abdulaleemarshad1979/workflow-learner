@@ -16,7 +16,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory="$escaped"
+WorkingDirectory=$project_dir
 ExecStart="$escaped/start.sh" --no-open
 Restart=on-failure
 RestartSec=5
