@@ -263,3 +263,14 @@ def test_adopt_pattern(engine):
         engine.stop()
     wf = engine.adopt_pattern(0, "Learned")
     assert wf["steps"][0]["kind"] == "navigate" and wf["demonstrations"] >= 2
+
+
+def test_browser_wait_can_fail_cleanly(engine):
+    wf = workflow(engine)
+    values = {p: "v" for p in parameters(wf["steps"])}
+    engine.begin_run(wf["id"], "bypass", values)
+    assert engine.waiting_for_browser()
+    r = engine.fail_waiting("Browser companion did not connect")
+    assert r["status"] == "failed" and not engine.waiting_for_browser()
+    with pytest.raises(Conflict):
+        engine.fail_waiting("again")

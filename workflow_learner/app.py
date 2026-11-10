@@ -19,6 +19,36 @@ from .store import Store
 STATIC = Path(__file__).parent / "static"
 # Derived from the public "key" in extension/manifest.json.
 EXTENSION_ORIGIN = "chrome-extension://ioonaammpiolcjejhgegdihpdplleanj"
+EXTENSION_ID = EXTENSION_ORIGIN.rsplit("/", 1)[1]
+# Desktop launcher id -> profile folder, in preference order.
+BROWSERS = [
+    ("google-chrome.desktop", ".config/google-chrome"),
+    ("com.google.Chrome.desktop", ".var/app/com.google.Chrome/config/google-chrome"),
+    ("brave-browser.desktop", ".config/BraveSoftware/Brave-Browser"),
+    ("com.brave.Browser.desktop", ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser"),
+    ("chromium.desktop", ".config/chromium"),
+    ("chromium-browser.desktop", ".config/chromium"),
+]
+APP_DIRS = [
+    Path("/usr/share/applications"),
+    Path.home() / ".local/share/applications",
+    Path("/var/lib/flatpak/exports/share/applications"),
+]
+
+
+def companion_browser(home=None):
+    """Launcher of the installed browser whose profile has the companion, if any."""
+    home = Path(home or Path.home())
+    for desktop_id, profile in BROWSERS:
+        if not any((d / desktop_id).exists() for d in APP_DIRS):
+            continue
+        for prefs in (home / profile).glob("*/*Preferences"):
+            try:
+                if EXTENSION_ID in prefs.read_text(errors="ignore"):
+                    return desktop_id
+            except OSError:
+                continue
+    return None
 
 
 def create_app(data_dir=None, background=True):
@@ -35,6 +65,46 @@ def create_app(data_dir=None, background=True):
     keys = json.loads(token_file.read_text())
     engine = Engine(store)
     native = {"process": None, "status": "off", "error": ""}
+    browser_wait = {"run": None, "since": 0.0, "launched": False}
+
+    async def launch_app(desktop_id):
+        proc = await asyncio.create_subprocess_exec(
+            "/usr/bin/python3",
+            str(Path(__file__).with_name("native.py")),
+            "execute",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(
+            proc.communicate(json.dumps({"kind": "native_launch", "app": desktop_id}).encode()), 20
+        )
+        return json.loads(out).get("ok", False)
+
+    async def ensure_browser():
+        """Open the companion's browser when a run needs it, instead of hanging."""
+        if not engine.waiting_for_browser():
+            browser_wait["run"] = None
+            return
+        run_id = engine.run["id"]
+        if browser_wait["run"] != run_id:
+            browser_wait.update(run=run_id, since=time.time(), launched=False)
+        if time.time() - engine.last_extension < 5:
+            browser_wait["since"] = time.time()  # connected; the companion will poll
+            return
+        waited = time.time() - browser_wait["since"]
+        # Silent for 40s+ means the browser is closed (a live companion polls every second).
+        if not browser_wait["launched"] and time.time() - engine.last_extension > 40:
+            browser_wait["launched"] = True
+            desktop_id = companion_browser()
+            if desktop_id:
+                with contextlib.suppress(OSError, ValueError, TimeoutError):
+                    await launch_app(desktop_id)
+        if waited > 60:
+            engine.fail_waiting(
+                "Browser companion did not connect. Open the browser that has the Workflow Learner "
+                "extension (Chrome or Brave) and check it is enabled, then run again."
+            )
 
     async def desktop_loop():
         while True:
@@ -65,7 +135,8 @@ def create_app(data_dir=None, background=True):
                                 command["id"], False, "Desktop action failed or timed out; inspect the app."
                             )
                 engine.expire()
-            except (OSError, ValueError, KeyError):
+                await ensure_browser()
+            except (OSError, ValueError, KeyError, Conflict):
                 native["error"] = "Desktop adapter failed; see setup instructions."
             await asyncio.sleep(0.3)
 
@@ -212,6 +283,7 @@ def create_app(data_dir=None, background=True):
             "patterns": engine.patterns(),
             "extension_connected": time.time() - engine.last_extension < 40,
             "native": {k: v for k, v in native.items() if k != "process"},
+            "companion_browser": companion_browser(),
             "data_dir": str(directory),
             "adapter_token": keys["adapter"],
         }

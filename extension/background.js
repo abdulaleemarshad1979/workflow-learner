@@ -92,6 +92,9 @@ async function execute(command) {
       const tab = await chrome.tabs.get(tabId);
       if (tab.url !== step.url) await chrome.tabs.update(tabId, {url: step.url, active: true});
     }
+    // Bring the replay window in front of whatever you are looking at.
+    const opened = await chrome.tabs.get(tabId);
+    await chrome.windows.update(opened.windowId, {focused: true}).catch(() => {});
     // Wait for the navigation to finish, not just the tabs.update acknowledgement.
     for (let i = 0; i < 100; i++) {
       const tab = await chrome.tabs.get(tabId);
@@ -104,6 +107,7 @@ async function execute(command) {
   const tab = await chrome.tabs.get(tabId);
   if (new URL(tab.url).origin !== new URL(step.url).origin) throw new Error('Website changed; no action was performed');
   await chrome.tabs.update(tabId, {active: true});
+  await chrome.windows.update(tab.windowId, {focused: true}).catch(() => {});
   let frameId = 0;
   if (step.frame) {
     const frames = await chrome.webNavigation.getAllFrames({tabId});
@@ -146,5 +150,7 @@ async function tick() {
 
 chrome.alarms.create('local-bridge', {periodInMinutes: 0.5});
 chrome.alarms.onAlarm.addListener(tick);
+// Connect as soon as the browser opens (the app may have launched it for a replay).
+chrome.runtime.onStartup.addListener(tick);
 setInterval(tick, 1000);
 tick();

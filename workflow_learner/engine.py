@@ -364,15 +364,32 @@ class Engine:
                 r["resume_status"] = r["status"]
                 r["status"] = "paused"
         else:
-            r.update(status="failed", error=error[:500] or "Action failed")
-            self.values = {}
-            wf = self.store.get("workflow", r["workflow_id"])
-            wf["failures"] += 1
-            if wf.get("autopilot") and r.get("trigger") == "schedule":
-                # Never repeat a half-finished routine unattended. You resume it.
-                wf["autopilot"]["paused_reason"] = "Last autopilot run failed: " + r["error"][:200]
-            self.store.put("workflow", wf)
+            self._fail(error)
         return self._save_run()
+
+    def waiting_for_browser(self):
+        """The active run's next step needs the browser companion and nobody took it."""
+        r = self.run
+        if not r or r["status"] != "running" or self.command:
+            return False
+        return not self.values["steps"][r["cursor"]]["kind"].startswith("native_")
+
+    def fail_waiting(self, error):
+        if not self.waiting_for_browser():
+            raise Conflict("Run is not waiting for the browser")
+        self._fail(error)
+        return self._save_run()
+
+    def _fail(self, error):
+        r = self.run
+        r.update(status="failed", error=error[:500] or "Action failed")
+        self.values = {}
+        wf = self.store.get("workflow", r["workflow_id"])
+        wf["failures"] += 1
+        if wf.get("autopilot") and r.get("trigger") == "schedule":
+            # Never repeat a half-finished routine unattended. You resume it.
+            wf["autopilot"]["paused_reason"] = "Last autopilot run failed: " + r["error"][:200]
+        self.store.put("workflow", wf)
 
     def adopt_pattern(self, index, name):
         found = self.patterns()

@@ -108,3 +108,18 @@ def test_bypass_run_and_autopilot_api(client):
     assert client.app.state.autopilot_tick() is None  # companion offline -> waits
     client.get("/api/adapter/state", headers=adapter)
     assert client.app.state.autopilot_tick()["trigger"] == "schedule"
+
+
+def test_companion_browser_detection(tmp_path, monkeypatch):
+    from workflow_learner import app as app_module
+
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "google-chrome.desktop").write_text("[Desktop Entry]")
+    (apps / "brave-browser.desktop").write_text("[Desktop Entry]")
+    monkeypatch.setattr(app_module, "APP_DIRS", [apps])
+    assert app_module.companion_browser(tmp_path) is None
+    brave = tmp_path / ".config/BraveSoftware/Brave-Browser/Default"
+    brave.mkdir(parents=True)
+    (brave / "Preferences").write_text('{"x": "' + app_module.EXTENSION_ID + '"}')
+    assert app_module.companion_browser(tmp_path) == "brave-browser.desktop"

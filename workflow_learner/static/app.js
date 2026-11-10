@@ -31,7 +31,8 @@ function card(w) {
 function setHTML(el, value) { if (el._rendered !== value) { el.innerHTML = value; el._rendered = value; } }
 function render() {
   const workflows = data.workflows || [];
-  $('#connection').textContent = data.extension_connected ? '● Browser companion connected' : '○ Browser companion not connected';
+  const browserName = /brave/i.test(data.companion_browser || '') ? 'Brave' : /chrom/i.test(data.companion_browser || '') ? 'Chrome' : 'browser';
+  $('#connection').textContent = data.extension_connected ? `● ${browserName} companion connected` : data.companion_browser ? `○ ${browserName} closed · opens automatically on replay` : '○ Browser companion not installed';
   $('#connection').classList.toggle('no-connect', !data.extension_connected);
   $('#nav-count').textContent = $('#stat-workflows').textContent = workflows.length;
   $('#stat-demos').textContent = workflows.reduce((a,w) => a + w.demonstrations, 0);
